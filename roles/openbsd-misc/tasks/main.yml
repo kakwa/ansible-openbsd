@@ -4,7 +4,7 @@
 - name: Ensure doas.conf has required rules
   ansible.builtin.lineinfile:
     path: /etc/doas.conf
-    line: "permit nopass {{ ansible_user_id }} as root"
+    line: "permit nopass {{ ansible_facts.user_id }} as root"
     create: yes
     mode: "0640"
-  when: ansible_os_family == "OpenBSD"
+  when: ansible_facts.os_family == "OpenBSD"
