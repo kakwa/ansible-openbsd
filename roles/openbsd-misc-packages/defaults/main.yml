@@ -5,7 +5,7 @@ openbsd_misc_packages:
   - vim
   - rsync
   - screen-5.0.1.2p0   # full name to avoid ambiguity with screen-4.0.3p10-shm
-  - tmux
+  # tmux  # uncomment when available on your release/mirror (e.g. tmux-3.4p0)
   - tree
   - nmap
   - curl
