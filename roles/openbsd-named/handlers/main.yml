@@ -1,12 +1,11 @@
 ---
-- name: Reload named
-  ansible.builtin.service:
-    name: named
-    state: reloaded
-  when: ansible_os_family == "OpenBSD"
+- name: Reload nsd
+  ansible.builtin.command:
+    cmd: "nsd-control rebuild && nsd-control reload"
+  when: ansible_facts.os_family == "OpenBSD"
 
 - name: Restart DnsCherry
   ansible.builtin.service:
     name: dnscherry
     state: restarted
-  when: ansible_os_family == "OpenBSD"
+  when: ansible_facts.os_family == "OpenBSD"

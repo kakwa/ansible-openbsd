@@ -1,0 +1,95 @@
+---
+# openbsd-nginx: install nginx, self-signed SSL vhosts for ldapcherry and dnscherry
+- name: Install nginx (OpenBSD)
+  community.general.openbsd_pkg:
+    name: nginx
+    state: present
+  when: ansible_facts.os_family == "OpenBSD"
+
+- name: Ensure nginx vhosts.d directory
+  ansible.builtin.file:
+    path: "{{ nginx_config_dir }}/vhosts.d"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: wheel
+  when: ansible_facts.os_family == "OpenBSD"
+
+# --- LdapCherry vhost (self-signed SSL) ---
+- name: Ensure SSL dir for ldapcherry vhost
+  ansible.builtin.file:
+    path: "{{ nginx_ldapcherry_ssl_dir }}"
+    state: directory
+    mode: "0750"
+    owner: root
+    group: wheel
+  when: ansible_facts.os_family == "OpenBSD" and nginx_ldapcherry_enable | bool
+
+- name: Generate self-signed cert for ldapcherry vhost
+  ansible.builtin.command:
+    cmd: >
+      openssl req -x509 -nodes -days {{ nginx_ldapcherry_ssl_valid_days }}
+      -newkey rsa:2048
+      -keyout {{ nginx_ldapcherry_ssl_key }}
+      -out {{ nginx_ldapcherry_ssl_cert }}
+      -subj "/CN={{ nginx_ldapcherry_ssl_cn }}"
+    creates: "{{ nginx_ldapcherry_ssl_cert }}"
+  when: ansible_facts.os_family == "OpenBSD" and nginx_ldapcherry_enable | bool
+
+- name: Deploy nginx vhost for ldapcherry
+  ansible.builtin.template:
+    src: nginx-ldapcherry.conf.j2
+    dest: "{{ nginx_config_dir }}/vhosts.d/ldapcherry.conf"
+    owner: root
+    group: wheel
+    mode: "0644"
+  when: ansible_facts.os_family == "OpenBSD" and nginx_ldapcherry_enable | bool
+  notify: Reload nginx
+
+# --- DnsCherry vhost (self-signed SSL) ---
+- name: Ensure SSL dir for dnscherry vhost
+  ansible.builtin.file:
+    path: "{{ nginx_dnscherry_ssl_dir }}"
+    state: directory
+    mode: "0750"
+    owner: root
+    group: wheel
+  when: ansible_facts.os_family == "OpenBSD" and nginx_dnscherry_enable | bool
+
+- name: Generate self-signed cert for dnscherry vhost
+  ansible.builtin.command:
+    cmd: >
+      openssl req -x509 -nodes -days {{ nginx_dnscherry_ssl_valid_days }}
+      -newkey rsa:2048
+      -keyout {{ nginx_dnscherry_ssl_key }}
+      -out {{ nginx_dnscherry_ssl_cert }}
+      -subj "/CN={{ nginx_dnscherry_ssl_cn }}"
+    creates: "{{ nginx_dnscherry_ssl_cert }}"
+  when: ansible_facts.os_family == "OpenBSD" and nginx_dnscherry_enable | bool
+
+- name: Deploy nginx vhost for dnscherry
+  ansible.builtin.template:
+    src: nginx-dnscherry.conf.j2
+    dest: "{{ nginx_config_dir }}/vhosts.d/dnscherry.conf"
+    owner: root
+    group: wheel
+    mode: "0644"
+  when: ansible_facts.os_family == "OpenBSD" and nginx_dnscherry_enable | bool
+  notify: Reload nginx
+
+# --- Include vhosts in nginx.conf ---
+- name: Ensure nginx.conf includes vhosts.d
+  ansible.builtin.lineinfile:
+    path: "{{ nginx_config_dir }}/nginx.conf"
+    line: "    include vhosts.d/*.conf;"
+    insertafter: "mime\\.types"
+    regexp: '^\s*include\s+vhosts\.d/\*\.conf\s*;'
+  when: ansible_facts.os_family == "OpenBSD"
+  notify: Reload nginx
+
+- name: Enable and start nginx (OpenBSD)
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  when: ansible_facts.os_family == "OpenBSD"

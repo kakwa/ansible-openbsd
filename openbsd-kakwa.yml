@@ -20,6 +20,7 @@
     - { role: zsh, tags: ["system", "zsh"] }
     - { role: openbsd-misc-packages, tags: ["system", "openbsd-misc-packages"] }
     - { role: openbsd-misc, tags: ["system", "openbsd-misc"] }
-#    - { role: openbsd-named, tags: ["dns", "openbsd-named"] }
+    - { role: openbsd-named, tags: ["dns", "openbsd-named", "named", "dnscherry"] }
+    - { role: openbsd-nginx, tags: ["nginx", "web", "openbsd-nginx"] }
 #    - { role: openbsd-ldap, tags: ["ldap", "openbsd-ldap"] }
 #    - { role: openbsd-ldapcherry, tags: ["ldap", "openbsd-ldapcherry"] }

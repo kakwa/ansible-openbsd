@@ -11,5 +11,6 @@ $TTL {{ internal_dns_soa_ttl }}
 
 @       IN  NS  {{ internal_dns_soa_ns }}.
 
-; Static A record – ldap.int.kakwalab.ovh → host default IPv4
+; Static A records – host default IPv4
+dns     IN  A   {{ ansible_default_ipv4.address }}
 ldap    IN  A   {{ ansible_default_ipv4.address }}

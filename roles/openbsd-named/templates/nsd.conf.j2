@@ -1,0 +1,29 @@
+# NSD config for {{ internal_dns_zone }} and {{ internal_dns_parent_zone }} (managed by openbsd-named role)
+# Enable control so nsd-control rebuild/reload work (run nsd-control-setup once to create keys in {{ internal_dns_nsd_conf_dir }}/)
+remote-control:
+  control-enable: yes
+
+server:
+  hide-version: yes
+{% if internal_dns_listen | length > 0 %}
+{% for a in internal_dns_listen %}
+  ip-address: {{ a }}
+{% endfor %}
+{% else %}
+  ip-address: 0.0.0.0
+{% endif %}
+  port: 53
+  username: _nsd
+  database: "{{ internal_dns_nsd_run_dir }}/nsd.db"
+  logfile: "/var/log/nsd.log"
+  pidfile: "{{ internal_dns_nsd_run_dir }}/nsd.pid"
+
+zone:
+  name: "{{ internal_dns_zone }}"
+  zonefile: "{{ internal_dns_nsd_zone_dir }}/db.{{ internal_dns_zone }}"
+
+{% if internal_dns_parent_zone_records is defined and internal_dns_parent_zone_records | length > 0 %}
+zone:
+  name: "{{ internal_dns_parent_zone }}"
+  zonefile: "{{ internal_dns_nsd_zone_dir }}/db.{{ internal_dns_parent_zone }}"
+{% endif %}

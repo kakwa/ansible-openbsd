@@ -9,3 +9,6 @@ openbsd_misc_packages:
   - tree
   - nmap
   - curl
+  - git
+  - htop
+  - py3-ldap-3.4.4p2

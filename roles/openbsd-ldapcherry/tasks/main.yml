@@ -34,9 +34,9 @@
     cmd: "{{ ansible_python.executable }} -m venv {{ ldapcherry_venv_dir }}"
     creates: "{{ ldapcherry_venv_dir }}/bin/python"
 
-- name: Install ldapcherry in virtualenv
+- name: Install ldapcherry from git (virtualenv)
   ansible.builtin.pip:
-    name: ldapcherry
+    name: "git+{{ ldapcherry_git_url }}"
     state: present
     virtualenv: "{{ ldapcherry_venv_dir }}"
 
