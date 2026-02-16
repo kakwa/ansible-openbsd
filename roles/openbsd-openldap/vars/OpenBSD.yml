@@ -1,0 +1,6 @@
+---
+# OpenBSD-specific paths and group (slapd runs as _openldap)
+openldap_group: "_openldap"
+openldap_ssl_dir: "/etc/openldap/ssl"
+openldap_ldif_dir: "/etc/openldap/ldifs"
+openldap_module_path: "/usr/local/libexec/openldap"

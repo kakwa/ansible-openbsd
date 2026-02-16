@@ -1,0 +1,8 @@
+---
+# OpenBSD uses doas and Python from packages (e.g. pkg_add python3)
+all:
+  hosts:
+    192.168.1.25:
+      ansible_user: admin
+      # OpenBSD pkg python%3.12 installs as python3.12
+      ansible_python_interpreter: /usr/local/bin/python3.12

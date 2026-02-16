@@ -1,0 +1,6 @@
+# Auxiliary objectClass so user entries can have memberOf (attribute is provided by memberof overlay module).
+# Load this only AFTER the memberof module and overlay are configured, so the overlay's memberOf attribute exists.
+dn: cn=memberof-user,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: memberof-user
+olcObjectClasses: ( 1.3.6.1.4.1.24552.500.1.1.2.2 NAME 'userWithMemberOf' DESC 'Auxiliary: memberOf for user entries' SUP top AUXILIARY MAY memberOf )

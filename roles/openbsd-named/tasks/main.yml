@@ -1,0 +1,174 @@
+---
+# Internal DNS: BIND (named) + zone with TSIG + DnsCherry
+- name: Ensure TSIG secret exists (generate or read)
+  block:
+    - name: Stat TSIG secret file
+      ansible.builtin.stat:
+        path: "{{ internal_dns_tsig_secret_file }}"
+      register: _tsig_secret_stat
+
+    - name: Generate and store TSIG secret
+      ansible.builtin.copy:
+        dest: "{{ internal_dns_tsig_secret_file }}"
+        content: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode }}"
+        mode: "0600"
+        owner: root
+        group: "{{ internal_dns_named_group }}"
+      when: not _tsig_secret_stat.stat.exists
+
+    - name: Read TSIG secret into fact
+      ansible.builtin.slurp:
+        src: "{{ internal_dns_tsig_secret_file }}"
+      register: _tsig_secret_slurp
+
+    - name: Set internal_dns_tsig_secret_b64 fact
+      ansible.builtin.set_fact:
+        internal_dns_tsig_secret_b64: "{{ _tsig_secret_slurp.content | b64decode }}"
+  when: ansible_os_family == "OpenBSD"
+
+- name: Install BIND (OpenBSD)
+  community.general.openbsd_pkg:
+    name: bind
+    state: present
+  when: ansible_os_family == "OpenBSD"
+
+- name: Ensure BIND zone directory and permissions
+  ansible.builtin.file:
+    path: "{{ internal_dns_zone_dir }}"
+    state: directory
+    owner: root
+    group: "{{ internal_dns_named_group }}"
+    mode: "0750"
+  when: ansible_os_family == "OpenBSD"
+
+- name: Deploy TSIG key file for named
+  ansible.builtin.copy:
+    dest: "{{ internal_dns_zone_dir }}/tsig.key"
+    content: |
+      key "{{ internal_dns_tsig_key_name }}" {
+          algorithm {{ internal_dns_tsig_algorithm }};
+          secret "{{ internal_dns_tsig_secret_b64 }}";
+      };
+    mode: "0640"
+    owner: root
+    group: "{{ internal_dns_named_group }}"
+  when: ansible_os_family == "OpenBSD"
+  notify: Reload named
+
+- name: Deploy named.conf
+  ansible.builtin.template:
+    src: named.conf.j2
+    dest: "{{ internal_dns_named_conf }}"
+    owner: root
+    group: "{{ internal_dns_named_group }}"
+    mode: "0640"
+  when: ansible_os_family == "OpenBSD"
+  notify: Reload named
+
+- name: Deploy zone file for int.kakwalab.ovh
+  ansible.builtin.template:
+    src: zone-master.j2
+    dest: "{{ internal_dns_zone_dir }}/db.{{ internal_dns_zone }}"
+    owner: root
+    group: "{{ internal_dns_named_group }}"
+    mode: "0640"
+  when: ansible_os_family == "OpenBSD"
+  notify: Reload named
+
+- name: Enable and start named (OpenBSD)
+  ansible.builtin.service:
+    name: named
+    state: started
+    enabled: true
+  when: ansible_os_family == "OpenBSD"
+
+# --- DnsCherry (virtualenv) ---
+- name: Ensure DnsCherry dirs and user
+  block:
+    - name: Create _dnscherry user (OpenBSD)
+      ansible.builtin.user:
+        name: _dnscherry
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+      when: ansible_os_family == "OpenBSD"
+
+    - name: Ensure /etc/dnscherry
+      ansible.builtin.file:
+        path: /etc/dnscherry
+        state: directory
+        owner: root
+        group: _dnscherry
+        mode: "0750"
+
+    - name: Ensure /var/dnscherry for venv and sessions
+      ansible.builtin.file:
+        path: /var/dnscherry
+        state: directory
+        owner: root
+        group: _dnscherry
+        mode: "0755"
+
+    - name: Ensure DnsCherry session dir
+      ansible.builtin.file:
+        path: /var/dnscherry/sessions
+        state: directory
+        owner: _dnscherry
+        group: _dnscherry
+        mode: "0750"
+  when: ansible_os_family == "OpenBSD"
+
+- name: Create DnsCherry virtualenv
+  ansible.builtin.command:
+    cmd: "{{ ansible_python.executable }} -m venv {{ internal_dns_dnscherry_venv }}"
+    creates: "{{ internal_dns_dnscherry_venv }}/bin/python"
+  when: ansible_os_family == "OpenBSD"
+
+- name: Install DnsCherry via pip (virtualenv)
+  ansible.builtin.pip:
+    name:
+      - dnscherry
+      - passlib
+    state: present
+    virtualenv: "{{ internal_dns_dnscherry_venv }}"
+  when: ansible_os_family == "OpenBSD" and internal_dns_dnscherry_install_method == "pip"
+
+- name: Install DnsCherry from git (virtualenv)
+  ansible.builtin.pip:
+    name: "git+{{ internal_dns_dnscherry_git_url }}"
+    state: present
+    virtualenv: "{{ internal_dns_dnscherry_venv }}"
+  when: ansible_os_family == "OpenBSD" and internal_dns_dnscherry_install_method == "git"
+
+- name: Install passlib for DnsCherry htpasswd auth (virtualenv)
+  ansible.builtin.pip:
+    name: passlib
+    state: present
+    virtualenv: "{{ internal_dns_dnscherry_venv }}"
+  when: ansible_os_family == "OpenBSD" and internal_dns_dnscherry_auth == "htpasswd"
+
+- name: Deploy DnsCherry config
+  ansible.builtin.template:
+    src: dnscherry.ini.j2
+    dest: /etc/dnscherry/dnscherry.ini
+    owner: root
+    group: _dnscherry
+    mode: "0640"
+  notify: Restart DnsCherry
+
+- name: Install DnsCherry rc.d script (OpenBSD)
+  ansible.builtin.template:
+    src: dnscherry.rc.j2
+    dest: /etc/rc.d/dnscherry
+    owner: root
+    group: wheel
+    mode: "0755"
+  when: ansible_os_family == "OpenBSD"
+  notify: Restart DnsCherry
+
+- name: Enable and start DnsCherry (OpenBSD)
+  ansible.builtin.service:
+    name: dnscherry
+    state: started
+    enabled: true
+  when: ansible_os_family == "OpenBSD"

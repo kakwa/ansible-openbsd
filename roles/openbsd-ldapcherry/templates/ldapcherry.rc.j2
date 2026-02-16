@@ -1,0 +1,10 @@
+#!/bin/ksh
+# LdapCherry – OpenBSD rc.d (virtualenv)
+daemon="{{ ldapcherry_venv_dir }}/bin/ldapcherry"
+daemon_flags="-c /etc/ldapcherry/ldapcherry.ini"
+daemon_user="_ldapcherry"
+
+. /etc/rc.d/rc.subr
+
+rc_reload=NO
+rc_cmd $1

@@ -1,0 +1,15 @@
+; Zone {{ internal_dns_zone }} – master with dynamic updates (TSIG)
+$ORIGIN {{ internal_dns_zone }}.
+$TTL {{ internal_dns_soa_ttl }}
+
+@   IN  SO  {{ internal_dns_soa_ns }}. {{ internal_dns_soa_hostmaster }}. (
+            {{ internal_dns_soa_serial }}
+            {{ internal_dns_soa_refresh }}
+            {{ internal_dns_soa_retry }}
+            {{ internal_dns_soa_expire }}
+            {{ internal_dns_soa_ttl }} )
+
+@       IN  NS  {{ internal_dns_soa_ns }}.
+
+; Static A record – ldap.int.kakwalab.ovh → host default IPv4
+ldap    IN  A   {{ ansible_default_ipv4.address }}

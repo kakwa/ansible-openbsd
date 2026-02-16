@@ -1,0 +1,40 @@
+# DnsCherry – internal zone {{ internal_dns_zone }} (TSIG updates)
+[global]
+server.socket_host = '{{ internal_dns_dnscherry_listen_host }}'
+server.socket_port = {{ internal_dns_dnscherry_listen_port }}
+server.thread_pool = 8
+request.show_tracebacks = False
+
+log.error_handler = 'syslog'
+log.access_handler = 'none'
+log.level = 'info'
+
+tools.sessions.on = True
+tools.sessions.timeout = 10
+
+[dns.zones]
+# Zone: {{ internal_dns_zone }}
+ip.{{ internal_dns_zone }} = '127.0.0.1'
+algorithm.{{ internal_dns_zone }} = '{{ internal_dns_tsig_algorithm }}'
+key.{{ internal_dns_zone }} = '{{ internal_dns_tsig_secret_b64 }}'
+
+[dns]
+default.zone = '{{ internal_dns_zone }}'
+type.displayed = 'A, AAAA, CNAME, MX'
+type.written = 'A, AAAA, CNAME, MX'
+default.ttl = '3600'
+
+[resources]
+template_dir = '{{ internal_dns_dnscherry_venv }}/share/dnscherry/templates/'
+
+[auth]
+{% if internal_dns_dnscherry_auth == 'none' %}
+auth.module = 'dnscherry.auth.modNone'
+{% elif internal_dns_dnscherry_auth == 'htpasswd' %}
+auth.module = 'dnscherry.auth.modHtpasswd'
+auth.htpasswd.file = '{{ internal_dns_dnscherry_htpasswd_file }}'
+{% endif %}
+
+[/static]
+tools.staticdir.on = True
+tools.staticdir.dir = '{{ internal_dns_dnscherry_venv }}/share/dnscherry/static/'

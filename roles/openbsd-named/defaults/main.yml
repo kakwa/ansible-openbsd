@@ -1,0 +1,38 @@
+---
+# Internal DNS (BIND + DnsCherry) – defaults
+# Zone and TSIG for dynamic updates (e.g. DnsCherry)
+
+internal_dns_zone: "int.kakwalab.ovh"
+internal_dns_tsig_key_name: "dnscherry-update"
+internal_dns_tsig_algorithm: "hmac-sha256"
+
+# BIND (named) – OpenBSD paths and ownership
+internal_dns_named_conf: "/var/named/etc/named.conf"
+internal_dns_named_workdir: "/var/named"
+internal_dns_zone_dir: "/var/named/etc"
+internal_dns_tsig_secret_file: "{{ internal_dns_zone_dir }}/.tsig_secret"
+internal_dns_named_group: "wheel"  # OpenBSD named often runs as root; use wheel for file group
+
+# Listen: empty = all; or list of IPs
+internal_dns_listen: []
+# Forwarders (e.g. for relay): list of IPs
+internal_dns_forwarders: []
+
+# DnsCherry (installed in a virtualenv)
+internal_dns_dnscherry_venv: "/var/dnscherry/venv"
+internal_dns_dnscherry_listen_host: "127.0.0.1"
+internal_dns_dnscherry_listen_port: 8080
+internal_dns_dnscherry_install_method: "pip"  # pip | git
+internal_dns_dnscherry_git_url: "https://github.com/kakwa/dnscherry.git"
+# Auth: none | htpasswd
+internal_dns_dnscherry_auth: "none"
+internal_dns_dnscherry_htpasswd_file: "/etc/dnscherry/users.db"
+
+# SOA for the zone (used in zone file template)
+internal_dns_soa_ns: "ns1.{{ internal_dns_zone }}"
+internal_dns_soa_hostmaster: "hostmaster.{{ internal_dns_zone }}"
+internal_dns_soa_serial: "1"
+internal_dns_soa_refresh: "86400"
+internal_dns_soa_retry: "7200"
+internal_dns_soa_expire: "3600000"
+internal_dns_soa_ttl: "3600"

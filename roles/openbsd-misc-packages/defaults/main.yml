@@ -1,0 +1,11 @@
+---
+# Packages installed by openbsd-misc-packages (OpenBSD pkg_add names).
+# Use full names where ambiguous (e.g. screen). Omit tcpdump (in base).
+openbsd_misc_packages:
+  - vim
+  - rsync
+  - screen-5.0.1.2p0   # full name to avoid ambiguity with screen-4.0.3p10-shm
+  - tmux
+  - tree
+  - nmap
+  - curl

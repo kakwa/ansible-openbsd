@@ -1,0 +1,10 @@
+---
+# Misc OpenBSD-specific tasks (e.g. doas, sysctl, rc.conf)
+# Extend as needed.
+- name: Ensure doas.conf has required rules
+  ansible.builtin.lineinfile:
+    path: /etc/doas.conf
+    line: "permit nopass {{ ansible_user_id }} as root"
+    create: yes
+    mode: "0640"
+  when: ansible_os_family == "OpenBSD"
