@@ -101,12 +101,6 @@
   when: ansible_facts.os_family == "OpenBSD"
   tags: named
 
-- name: Rebuild NSD zone database
-  ansible.builtin.command:
-    cmd: "nsd-control rebuild"
-  when: ansible_facts.os_family == "OpenBSD"
-  tags: named
-
 # --- DnsCherry (virtualenv) ---
 - name: Ensure DnsCherry dirs and user
   tags: dnscherry
