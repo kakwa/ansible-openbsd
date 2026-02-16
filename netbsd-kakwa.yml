@@ -1,0 +1,10 @@
+---
+- name: OpenBSD Server Setup
+  hosts: all
+  become: true
+  roles:
+    - { role: os-release, tags: ["system", "os-release"] }
+    - { role: vim, tags: ["system", "vim"] }
+    - { role: zsh, tags: ["system", "zsh"] }
+    - { role: openbsd-misc-packages, tags: ["system", "openbsd-misc-packages"] }
+    - { role: openbsd-misc, tags: ["system", "openbsd-misc"] }
