@@ -56,20 +56,6 @@
   tags: named
   notify: Reload nsd
 
-- name: Deploy parent zone file (NSD)
-  ansible.builtin.template:
-    src: zone-parent.j2
-    dest: "{{ internal_dns_nsd_zone_dir }}/db.{{ internal_dns_parent_zone }}"
-    owner: root
-    group: _nsd
-    mode: "0640"
-  when: >
-    ansible_facts.os_family == "OpenBSD"
-    and internal_dns_parent_zone_records is defined
-    and internal_dns_parent_zone_records | length > 0
-  tags: named
-  notify: Reload nsd
-
 - name: Stat NSD control key (for idempotent setup)
   ansible.builtin.stat:
     path: "{{ internal_dns_nsd_conf_dir }}/nsd_control.key"

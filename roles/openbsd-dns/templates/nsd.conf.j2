@@ -1,4 +1,4 @@
-# NSD config for {{ internal_dns_zone }} and {{ internal_dns_parent_zone }} (managed by openbsd-named role)
+# NSD config for {{ internal_dns_zone }} (managed by openbsd-named role)
 # Enable control so nsd-control rebuild/reload work (run nsd-control-setup once to create keys in {{ internal_dns_nsd_conf_dir }}/)
 remote-control:
   control-enable: yes
@@ -18,12 +18,19 @@ server:
   logfile: "/var/log/nsd.log"
   pidfile: "{{ internal_dns_nsd_run_dir }}/nsd.pid"
 
+{% if internal_dns_tsig_secret_b64 | length > 0 %}
+# TSIG key for zone updates
+key:
+  name: "{{ internal_dns_tsig_key_name }}"
+  algorithm: {{ internal_dns_tsig_algorithm }}
+  secret: "{{ internal_dns_tsig_secret_b64 }}"
+
+{% endif %}
 zone:
   name: "{{ internal_dns_zone }}"
   zonefile: "{{ internal_dns_nsd_zone_dir }}/db.{{ internal_dns_zone }}"
-
-{% if internal_dns_parent_zone_records is defined and internal_dns_parent_zone_records | length > 0 %}
-zone:
-  name: "{{ internal_dns_parent_zone }}"
-  zonefile: "{{ internal_dns_nsd_zone_dir }}/db.{{ internal_dns_parent_zone }}"
+{% if internal_dns_tsig_secret_b64 | length > 0 %}
+  # Allow zone transfers and notifications with TSIG key from 192.168.1.0/24 subnet
+  allow-notify: 192.168.1.0/24 {{ internal_dns_tsig_key_name }}
+  provide-xfr: 192.168.1.0/24 {{ internal_dns_tsig_key_name }}
 {% endif %}

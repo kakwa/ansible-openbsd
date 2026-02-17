@@ -29,15 +29,6 @@ internal_dns_soa_retry: "7200"
 internal_dns_soa_expire: "3600000"
 internal_dns_soa_ttl: "3600"
 
-# Optional parent zone (e.g. kakwalab.ovh) for static records like sun.kakwalab.ovh
-internal_dns_parent_zone: "kakwalab.ovh"
-internal_dns_parent_zone_ttl: "3600"
-internal_dns_parent_zone_ns: "ns1.int.kakwalab.ovh"
-internal_dns_parent_zone_hostmaster: "hostmaster.int.kakwalab.ovh"
-# Static A record names in parent zone (all get ansible_default_ipv4.address)
-internal_dns_parent_zone_records:
-  - sun
-
 # NSD – OpenBSD (base or package)
 # NSD is in base (/usr/sbin/nsd, default config /var/nsd/etc/nsd.conf). Set package name only if using a port.
 internal_dns_nsd_package: ""

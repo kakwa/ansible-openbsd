@@ -9,4 +9,9 @@ daemon_user="_dnscherry"
 pexp="/opt/dnscher"
 rc_bg=YES
 rc_reload=NO
+
+rc_check() {
+        pgrep -q -f 'python.*dnscherry'
+}
+
 rc_cmd $1
