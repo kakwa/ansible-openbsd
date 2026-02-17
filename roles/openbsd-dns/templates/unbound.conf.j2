@@ -1,0 +1,57 @@
+
+server:
+        interface: 0.0.0.0
+        interface: ::0
+        port: 53
+        do-ip6: yes
+
+        #log-time-ascii: yes
+        #log-queries: yes
+        #log-replies: yes
+        #log-servfail: yes
+        #verbosity: 3
+        do-not-query-localhost: no
+        
+        access-control: 0.0.0.0/0 refuse
+        access-control: 192.168.1.0/24 allow
+        access-control: 127.0.0.0/8 allow
+        access-control: ::0/0 refuse
+        access-control: ::1 allow
+
+        hide-identity: yes
+        hide-version: yes
+
+        prefetch: yes
+        cache-min-ttl: 30
+        cache-max-ttl: 86400
+
+
+        harden-glue: yes
+        harden-dnssec-stripped: yes
+
+        # Perform DNSSEC validation.
+        #
+        auto-trust-anchor-file: "/var/unbound/db/root.key"
+        val-log-level: 2
+   
+        domain-insecure: "{{ internal_dns_zone }}"
+        domain-insecure: "{{ internal_dns_zone }}."
+
+        include: "{{ internal_dns_unbound_deny }}"
+
+        local-zone: "{{ internal_dns_zone }}." nodefault
+
+        # Synthesize NXDOMAINs from DNSSEC NSEC chains.
+        # https://tools.ietf.org/html/rfc8198
+        #
+        #aggressive-nsec: yes
+
+remote-control:
+        control-enable: yes
+        control-interface: /var/run/unbound.sock
+
+stub-zone:
+    name: "{{ internal_dns_zone }}."
+    stub-addr: 127.0.0.1@5353
+    stub-prime: no
+

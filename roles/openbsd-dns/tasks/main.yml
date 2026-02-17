@@ -45,6 +45,28 @@
   tags: named
   notify: Reload nsd
 
+- name: Deploy Unbound config
+  ansible.builtin.template:
+    src: unbound.conf.j2
+    dest: "{{ internal_dns_unbound_conf }}"
+    owner: root
+    group: _unbound
+    mode: "0640"
+  when: ansible_facts.os_family == "OpenBSD"
+  tags: named
+  notify: Reload unbound
+
+- name: Deploy Unbound deny list
+  ansible.builtin.copy:
+    src: adblock.conf
+    dest: "{{ internal_dns_unbound_deny }}"
+    owner: root
+    group: _unbound
+    mode: "0640"
+  when: ansible_facts.os_family == "OpenBSD"
+  tags: named
+  notify: Reload unbound
+
 - name: Deploy zone file for {{ internal_dns_zone }} (NSD)
   ansible.builtin.template:
     src: zone-master.j2
@@ -74,8 +96,8 @@
 - name: Stop and disable unbound (free port 53 for NSD)
   ansible.builtin.service:
     name: unbound
-    state: stopped
-    enabled: false
+    state: started
+    enabled: true
   when: ansible_facts.os_family == "OpenBSD"
   tags: named
 

@@ -33,6 +33,8 @@ internal_dns_soa_ttl: "3600"
 # NSD is in base (/usr/sbin/nsd, default config /var/nsd/etc/nsd.conf). Set package name only if using a port.
 internal_dns_nsd_package: ""
 internal_dns_nsd_conf: "/var/nsd/etc/nsd.conf"
+internal_dns_unbound_conf: "/var/unbound/etc/unbound.conf"
+internal_dns_unbound_deny: "/var/unbound/etc/adblock.conf"
 internal_dns_nsd_conf_dir: "/var/nsd/etc"
 internal_dns_nsd_zone_dir: "/var/nsd/zones"
 internal_dns_nsd_run_dir: "/var/nsd/run"
