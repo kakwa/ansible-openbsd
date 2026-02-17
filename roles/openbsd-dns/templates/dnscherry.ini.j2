@@ -13,8 +13,9 @@ tools.sessions.on = True
 tools.sessions.timeout = 10
 
 [dns.zones]
-# Zone: {{ internal_dns_zone }}
+# Zone: {{ internal_dns_zone }} (TSIG key {{ internal_dns_tsig_key_name }}, NSD on port {{ internal_dns_nsd_port }})
 ip.{{ internal_dns_zone }} = '127.0.0.1'
+port.{{ internal_dns_zone }} = {{ internal_dns_nsd_port }}
 algorithm.{{ internal_dns_zone }} = '{{ internal_dns_tsig_algorithm }}'
 key.{{ internal_dns_zone }} = '{{ internal_dns_tsig_secret_b64 }}'
 

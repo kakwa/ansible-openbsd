@@ -3,18 +3,21 @@
 
 # Zone (used in zone files and DnsCherry config)
 internal_dns_zone: "int.kakwalab.ovh"
-# TSIG (DnsCherry; NSD has no dynamic updates, so key is placeholder if DnsCherry is used)
-internal_dns_tsig_key_name: "dnscherry-update"
-internal_dns_tsig_algorithm: "hmac-sha256"
-internal_dns_tsig_secret_b64: ""
+# TSIG key for signed queries, AXFR, and DnsCherry dynamic updates (hmac-sha512, 64-byte key)
+internal_dns_tsig_key_name: "sec1_key"
+internal_dns_tsig_algorithm: "hmac-sha512"
+internal_dns_tsig_secret_b64: "y834Dr2nxSIVNCljTZ3pXSeG1KOJ736c81JEjpukA/Mwv3gukMrcG1hBIAR7SDlL62jtCQ3YPqVnS9DgictByQ=="
 
 # Listen: empty = all; or list of IPs
 internal_dns_listen: []
+# NSD ACLs when TSIG is used (provide-xfr, allow-notify)
+internal_dns_nsd_provide_xfr: "192.168.1.0/24"
+internal_dns_nsd_allow_notify: "192.168.1.0/24"
 
 # DnsCherry (installed in a virtualenv)
 internal_dns_dnscherry_venv: "/opt/dnscherry/venv"
 internal_dns_dnscherry_listen_host: "127.0.0.1"
-internal_dns_dnscherry_listen_port: 8080
+internal_dns_dnscherry_listen_port: 8081
 internal_dns_dnscherry_git_url: "https://github.com/kakwa/dnscherry.git"
 # Auth: none | htpasswd
 internal_dns_dnscherry_auth: "none"
@@ -33,6 +36,7 @@ internal_dns_soa_ttl: "3600"
 # NSD is in base (/usr/sbin/nsd, default config /var/nsd/etc/nsd.conf). Set package name only if using a port.
 internal_dns_nsd_package: ""
 internal_dns_nsd_conf: "/var/nsd/etc/nsd.conf"
+internal_dns_nsd_port: 5353
 internal_dns_unbound_conf: "/var/unbound/etc/unbound.conf"
 internal_dns_unbound_deny: "/var/unbound/etc/adblock.conf"
 internal_dns_nsd_conf_dir: "/var/nsd/etc"

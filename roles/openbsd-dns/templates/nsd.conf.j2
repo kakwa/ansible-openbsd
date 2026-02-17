@@ -6,7 +6,7 @@ remote-control:
 server:
   hide-version: yes
   ip-address: 127.0.0.1
-  port: 5353
+  port: {{ internal_dns_nsd_port }}
   username: _nsd
   database: "{{ internal_dns_nsd_run_dir }}/nsd.db"
   logfile: "/var/log/nsd.log"
@@ -24,7 +24,6 @@ zone:
   name: "{{ internal_dns_zone }}"
   zonefile: "{{ internal_dns_nsd_zone_dir }}/db.{{ internal_dns_zone }}"
 {% if internal_dns_tsig_secret_b64 | length > 0 %}
-  # Allow zone transfers and notifications with TSIG key from 192.168.1.0/24 subnet
-  allow-notify: 192.168.1.0/24 {{ internal_dns_tsig_key_name }}
-  provide-xfr: 192.168.1.0/24 {{ internal_dns_tsig_key_name }}
+  allow-notify: {{ internal_dns_nsd_allow_notify }} {{ internal_dns_tsig_key_name }}
+  provide-xfr: {{ internal_dns_nsd_provide_xfr }} {{ internal_dns_tsig_key_name }}
 {% endif %}
