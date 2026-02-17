@@ -1,7 +1,8 @@
 ---
 - name: Reload nsd
-  ansible.builtin.command:
-    cmd: "nsd-control rebuild && nsd-control reload"
+  ansible.builtin.service:
+    name: nsd
+    state: reloaded
   when: ansible_facts.os_family == "OpenBSD"
 
 - name: Restart DnsCherry
