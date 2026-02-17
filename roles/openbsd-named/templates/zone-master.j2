@@ -12,5 +12,5 @@ $TTL {{ internal_dns_soa_ttl }}
 @       IN  NS  {{ internal_dns_soa_ns }}.
 
 ; Static A records – host default IPv4
-dns     IN  A   {{ ansible_default_ipv4.address }}
-ldap    IN  A   {{ ansible_default_ipv4.address }}
+dns     IN  A   {{ ansible_facts['default_ipv4'].address }}
+ldap    IN  A   {{ ansible_facts['default_ipv4'].address }}

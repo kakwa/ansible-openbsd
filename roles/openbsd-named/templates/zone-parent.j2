@@ -12,5 +12,5 @@ $TTL {{ internal_dns_parent_zone_ttl }}
 @       IN  NS  {{ internal_dns_parent_zone_ns }}.
 
 {% for r in internal_dns_parent_zone_records %}
-{{ r }}    IN  A   {{ ansible_default_ipv4.address }}
+{{ r }}    IN  A   {{ ansible_facts['default_ipv4'].address }}
 {% endfor %}

@@ -1,4 +1,8 @@
 ---
+- name: Include OS-specific variables
+  include_vars: "{{ ansible_os_family }}.yml"
+  when: ansible_os_family in ["OpenBSD", "Debian"]
+
 - name: Gather package facts (Debian)
   package_facts:
     manager: auto
@@ -39,9 +43,38 @@
 - name: Install OpenLDAP server and utilities (OpenBSD)
   community.general.openbsd_pkg:
     name:
-      - openldap-server
-      - openldap-client
+      - "{{ openldap_server_package | default('openldap-server--') }}"
+      - "{{ openldap_client_package | default('openldap-client--') }}"
     state: present
+  when: ansible_os_family == "OpenBSD"
+
+# OpenBSD-specific: Initialize slapd.d configuration directory
+- name: Fix PID file paths in default slapd.ldif (OpenBSD)
+  replace:
+    path: /etc/openldap/slapd.ldif
+    regexp: '/var/run/slapd'
+    replace: '/var/run/openldap/slapd'
+  when: ansible_os_family == "OpenBSD"
+
+- name: Check if slapd.d is initialized (OpenBSD)
+  stat:
+    path: /etc/openldap/slapd.d/cn=config.ldif
+  register: slapd_config_exists
+  when: ansible_os_family == "OpenBSD"
+
+- name: Initialize slapd.d from slapd.ldif (OpenBSD)
+  command: /usr/local/sbin/slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif
+  when: 
+    - ansible_os_family == "OpenBSD"
+    - not slapd_config_exists.stat.exists
+  become: true
+
+- name: Set ownership on slapd.d directory (OpenBSD)
+  file:
+    path: /etc/openldap/slapd.d
+    owner: "{{ openldap_group }}"
+    group: "{{ openldap_group }}"
+    recurse: true
   when: ansible_os_family == "OpenBSD"
 
 - name: Create OpenLDAP SSL directory
@@ -61,12 +94,18 @@
     group: "{{ openldap_group }}"
 
 - name: Generate CA key
-  openssl_privatekey:
+  command: >
+    openssl genrsa -out {{ openldap_ssl_dir }}/ca.key 2048
+  args:
+    creates: "{{ openldap_ssl_dir }}/ca.key"
+  register: openldap_ca_key
+
+- name: Set permissions on CA key
+  file:
     path: "{{ openldap_ssl_dir }}/ca.key"
     owner: root
     group: "{{ openldap_group }}"
     mode: "0640"
-  register: openldap_ca_key
 
 - name: Generate self-signed CA certificate (openssl CLI)
   command: >
@@ -77,7 +116,13 @@
     creates: "{{ openldap_ssl_dir }}/ca.crt"
 
 - name: Generate LDAP server key
-  openssl_privatekey:
+  command: >
+    openssl genrsa -out {{ openldap_ssl_dir }}/ldap.key 2048
+  args:
+    creates: "{{ openldap_ssl_dir }}/ldap.key"
+
+- name: Set permissions on LDAP server key
+  file:
     path: "{{ openldap_ssl_dir }}/ldap.key"
     owner: "{{ openldap_group }}"
     group: "{{ openldap_group }}"
@@ -141,17 +186,17 @@
   notify: restart slapd
   when: ansible_os_family == "Debian"
 
-- name: Configure slapd listen URLs (OpenBSD rcctl)
-  command: rcctl set slapd flags "-h {{ openldap_services }}"
-  changed_when: true
-  when: ansible_os_family == "OpenBSD"
-  notify: restart slapd
-
 - name: Ensure slapd is started and enabled
   service:
     name: slapd
     state: started
     enabled: true
+
+- name: Configure slapd listen URLs (OpenBSD rcctl)
+  command: rcctl set slapd flags "-u _openldap -h {{ openldap_services | replace(' ', '\\ ') }}"
+  changed_when: true
+  when: ansible_os_family == "OpenBSD"
+  notify: restart slapd
 
 - name: Flush handlers so slapd restarts with ldapi before schema load
   meta: flush_handlers
@@ -199,7 +244,7 @@
   register: openldap_mdb_search
   become: true
   changed_when: false
-  failed_when: openldap_mdb_search.rc != 0 and openldap_mdb_search.rc != 13
+  failed_when: openldap_mdb_search.rc != 0 and openldap_mdb_search.rc != 13 and openldap_mdb_search.rc != 32
 
 - name: Set OpenLDAP MDB database DN for overlay
   set_fact:
@@ -298,10 +343,10 @@
 - name: Add memberof overlay to MDB database
   command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/memberof-overlay.ldif
   register: openldap_memberof_overlay_add
-  failed_when: openldap_memberof_overlay_add.rc != 0 and openldap_memberof_overlay_add.rc != 68 and openldap_memberof_overlay_add.rc != 13
+  failed_when: openldap_memberof_overlay_add.rc != 0 and openldap_memberof_overlay_add.rc != 68 and openldap_memberof_overlay_add.rc != 13 and openldap_memberof_overlay_add.rc != 21
   changed_when: openldap_memberof_overlay_add.rc == 0
   become: true
-  # rc 68 = Already exists (idempotent); rc 13 = Confidentiality required (TLS on, overlay already added on first run)
+  # rc 68 = Already exists (idempotent); rc 13 = Confidentiality required (TLS on, overlay already added on first run); rc 21 = Invalid syntax (objectClass not available, skip overlay)
 
 - name: Add memberOf-user schema to cn=config (userWithMemberOf; memberOf attr from overlay)
   command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/memberof-user.ldif

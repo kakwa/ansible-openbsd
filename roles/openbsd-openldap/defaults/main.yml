@@ -4,6 +4,10 @@
 
 openldap_group: "openldap"
 
+# Package names (overridden for OpenBSD in vars/OpenBSD.yml)
+openldap_server_package: "slapd"
+openldap_client_package: "ldap-utils"
+
 openldap_domain: "kakwalab.ovh"
 openldap_organization: "Kakwa Lab"
 # Base DN derived from domain (dc=kakwalab,dc=ovh)

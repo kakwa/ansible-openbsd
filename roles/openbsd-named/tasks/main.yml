@@ -121,12 +121,12 @@
         group: _dnscherry
         mode: "0750"
 
-    - name: Ensure /var/dnscherry for venv and sessions
+    - name: Ensure /opt/dnscherry for venv
       ansible.builtin.file:
-        path: /var/dnscherry
+        path: /opt/dnscherry
         state: directory
         owner: root
-        group: _dnscherry
+        group: wheel
         mode: "0755"
 
     - name: Ensure DnsCherry session dir
@@ -138,10 +138,22 @@
         mode: "0750"
   when: ansible_facts.os_family == "OpenBSD"
 
-- name: Create DnsCherry virtualenv
+- name: Install DnsCherry Python dependencies (OpenBSD)
+  tags: dnscherry
+  community.general.openbsd_pkg:
+    name:
+      - py3-ldap
+      - openldap-client
+      - py3-dnspython
+      - py3-CherryPy
+      - py3-mako
+    state: present
+  when: ansible_facts.os_family == "OpenBSD"
+
+- name: Create DnsCherry virtualenv with system site packages
   tags: dnscherry
   ansible.builtin.command:
-    cmd: "{{ ansible_python.executable }} -m venv {{ internal_dns_dnscherry_venv }}"
+    cmd: "{{ ansible_facts['python']['executable'] }} -m venv --system-site-packages {{ internal_dns_dnscherry_venv }}"
     creates: "{{ internal_dns_dnscherry_venv }}/bin/python"
   when: ansible_facts.os_family == "OpenBSD"
 

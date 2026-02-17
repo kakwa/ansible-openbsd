@@ -12,7 +12,7 @@ internal_dns_tsig_secret_b64: ""
 internal_dns_listen: []
 
 # DnsCherry (installed in a virtualenv)
-internal_dns_dnscherry_venv: "/var/dnscherry/venv"
+internal_dns_dnscherry_venv: "/opt/dnscherry/venv"
 internal_dns_dnscherry_listen_host: "127.0.0.1"
 internal_dns_dnscherry_listen_port: 8080
 internal_dns_dnscherry_git_url: "https://github.com/kakwa/dnscherry.git"

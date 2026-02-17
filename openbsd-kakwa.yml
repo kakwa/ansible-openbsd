@@ -22,5 +22,5 @@
     - { role: openbsd-misc, tags: ["system", "openbsd-misc"] }
     - { role: openbsd-named, tags: ["dns", "openbsd-named", "named", "dnscherry"] }
     - { role: openbsd-nginx, tags: ["nginx", "web", "openbsd-nginx"] }
-#    - { role: openbsd-ldap, tags: ["ldap", "openbsd-ldap"] }
-#    - { role: openbsd-ldapcherry, tags: ["ldap", "openbsd-ldapcherry"] }
+    - { role: openbsd-openldap, tags: ["ldap", "openbsd-openldap"] }
+    - { role: openbsd-ldapcherry, tags: ["ldap", "openbsd-ldapcherry"] }

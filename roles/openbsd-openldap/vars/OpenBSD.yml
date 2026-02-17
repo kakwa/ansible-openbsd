@@ -4,3 +4,7 @@ openldap_group: "_openldap"
 openldap_ssl_dir: "/etc/openldap/ssl"
 openldap_ldif_dir: "/etc/openldap/ldifs"
 openldap_module_path: "/usr/local/libexec/openldap"
+
+# OpenBSD package names with flavors
+openldap_server_package: "openldap-server--"
+openldap_client_package: "openldap-client--"
