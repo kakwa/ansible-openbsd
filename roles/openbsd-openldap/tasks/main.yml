@@ -242,6 +242,26 @@
   set_fact:
     openldap_mdb_dn: "{{ ((openldap_mdb_search.stdout | regex_findall('dn:\\s*(.+)')) + ['olcDatabase={1}mdb,cn=config'])[0] if openldap_mdb_search.rc == 0 else 'olcDatabase={1}mdb,cn=config' }}"
 
+# OpenBSD: ensure MDB has no-writemap (existing slapd.d may have been created without it)
+- name: Create LDIF to set olcDbEnvFlags no-writemap on MDB database (OpenBSD)
+  ansible.builtin.copy:
+    content: |
+      dn: {{ openldap_mdb_dn }}
+      changetype: modify
+      replace: olcDbEnvFlags
+      olcDbEnvFlags: no-writemap
+    dest: "{{ openldap_ldif_dir }}/mdb-no-writemap.ldif"
+    mode: "0600"
+  become: true
+
+- name: Set olcDbEnvFlags no-writemap on MDB database (OpenBSD W^X compatibility)
+  ansible.builtin.command: ldapmodify -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/mdb-no-writemap.ldif
+  register: openldap_mdb_nowritemap
+  become: true
+  notify: restart slapd
+  failed_when: false
+  changed_when: openldap_mdb_nowritemap.rc == 0
+
 # memberOf overlay requires the memberof module to be loaded (see https://tylersguides.com/guides/openldap-memberof-overlay/).
 # Without it, ldapadd of the overlay would fail; we load the module so the overlay can be applied.
 - name: Get module list DN and current olcModuleLoad from cn=config
