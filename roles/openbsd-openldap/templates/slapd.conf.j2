@@ -1,0 +1,11 @@
+# Minimal slapd.conf for CLI tools (slapcat, etc.). slapd uses OLC (slapd.d) at runtime.
+# See slapd.conf(5). This file should NOT be world readable.
+
+pidfile		/var/run/openldap/slapd.pid
+argsfile	/var/run/openldap/slapd.args
+
+database	mdb
+suffix		"{{ openldap_base_dn }}"
+rootdn		"cn=admin,{{ openldap_base_dn }}"
+directory	/var/openldap-data
+index		objectClass eq

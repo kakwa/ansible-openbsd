@@ -17,7 +17,6 @@ olcModuleload: back_mdb.la
 dn: cn=schema,cn=config
 objectClass: olcSchemaConfig
 cn: schema
-include: file:///etc/openldap/schema/core.ldif
 
 dn: olcDatabase=frontend,cn=config
 objectClass: olcDatabaseConfig
@@ -33,7 +32,6 @@ olcSuffix: dc=my-domain,dc=com
 olcRootDN: cn=Manager,dc=my-domain,dc=com
 olcRootPW: secret
 olcDbDirectory: /var/openldap-data
-olcDbEnvFlags: no-writemap
 olcDbIndex: objectClass eq
 
 dn: olcDatabase=monitor,cn=config
