@@ -59,6 +59,22 @@
     replace: "olcRootPW: {{ openldap_admin_password_hash.stdout }}"
   when: not slapd_config_exists.stat.exists
 
+# OpenBSD W^X / mmap: LMDB writemap causes "Operation not permitted". Disable writemap for MDB.
+- name: Disable LMDB writemap in slapd.ldif (OpenBSD compatibility)
+  ansible.builtin.replace:
+    path: /etc/openldap/slapd.ldif
+    regexp: '^olcDbEnvFlags: writemap'
+    replace: 'olcDbEnvFlags: no-writemap'
+  when: not slapd_config_exists.stat.exists
+
+- name: Add olcDbEnvFlags no-writemap to slapd.ldif if missing (OpenBSD compatibility)
+  ansible.builtin.lineinfile:
+    path: /etc/openldap/slapd.ldif
+    line: 'olcDbEnvFlags: no-writemap'
+    insertafter: '^olcDbDirectory:'
+    state: present
+  when: not slapd_config_exists.stat.exists
+
 - name: Initialize slapd.d from slapd.ldif
   ansible.builtin.command: /usr/local/sbin/slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif
   when: not slapd_config_exists.stat.exists
