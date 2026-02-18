@@ -1,0 +1,27 @@
+# Knot DNS config for {{ internal_dns_zone }} (managed by openbsd-dns role)
+
+server:
+    rundir: "/var/run/knot"
+    user: _knot:_knot
+    listen: 0.0.0.0@{{ internal_dns_knot_port }}
+
+log:
+  - target: stdout
+    any: debug
+
+key:
+  - id: {{ internal_dns_tsig_key_name }}
+    algorithm: {{ internal_dns_tsig_algorithm }}
+    secret: {{ internal_dns_tsig_secret_b64 }}
+
+acl:
+  - id: acl_tsig
+    address: [{{ internal_dns_knot_allow_transfer }}, ::1, 127.0.0.1/8]
+    key: {{ internal_dns_tsig_key_name }}
+    action: [ update, notify, transfer ]
+
+zone:
+  - domain: {{ internal_dns_zone }}.
+    storage: {{ internal_dns_knot_storage_dir }}/
+    file: {{ internal_dns_zone }}.zone
+    acl: [ acl_tsig ]

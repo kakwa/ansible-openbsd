@@ -1,7 +1,7 @@
 ---
-- name: Reload nsd
+- name: Reload knot
   ansible.builtin.service:
-    name: nsd
+    name: knot
     state: reloaded
   when: ansible_facts.os_family == "OpenBSD"
 
@@ -9,10 +9,4 @@
   ansible.builtin.service:
     name: unbound
     state: reloaded
-  when: ansible_facts.os_family == "OpenBSD"
-
-- name: Restart DnsCherry
-  ansible.builtin.service:
-    name: dnscherry
-    state: restarted
   when: ansible_facts.os_family == "OpenBSD"

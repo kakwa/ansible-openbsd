@@ -1,27 +1,17 @@
 ---
-# Internal DNS – NSD (OpenBSD)
+# Internal DNS – Knot DNS (OpenBSD)
 
-# Zone (used in zone files and DnsCherry config)
+# Zone (used in zone files)
 internal_dns_zone: "int.kakwalab.ovh"
-# TSIG key for signed queries, AXFR, and DnsCherry dynamic updates (hmac-sha512, 64-byte key)
+# TSIG key for signed queries, AXFR, and dynamic updates (hmac-sha512, 64-byte key)
 internal_dns_tsig_key_name: "sec1_key"
 internal_dns_tsig_algorithm: "hmac-sha512"
 internal_dns_tsig_secret_b64: "y834Dr2nxSIVNCljTZ3pXSeG1KOJ736c81JEjpukA/Mwv3gukMrcG1hBIAR7SDlL62jtCQ3YPqVnS9DgictByQ=="
 
 # Listen: empty = all; or list of IPs
 internal_dns_listen: []
-# NSD ACLs when TSIG is used (provide-xfr, allow-notify)
-internal_dns_nsd_provide_xfr: "192.168.1.0/24"
-internal_dns_nsd_allow_notify: "192.168.1.0/24"
-
-# DnsCherry (installed in a virtualenv)
-internal_dns_dnscherry_venv: "/opt/dnscherry/venv"
-internal_dns_dnscherry_listen_host: "127.0.0.1"
-internal_dns_dnscherry_listen_port: 8081
-internal_dns_dnscherry_git_url: "https://github.com/kakwa/dnscherry.git"
-# Auth: none | htpasswd
-internal_dns_dnscherry_auth: "none"
-internal_dns_dnscherry_htpasswd_file: "/etc/dnscherry/users.db"
+# Knot ACLs when TSIG is used
+internal_dns_knot_allow_transfer: "192.168.1.0/24"
 
 # SOA for the zone (used in zone file template)
 internal_dns_soa_ns: "ns1.{{ internal_dns_zone }}"
@@ -32,13 +22,12 @@ internal_dns_soa_retry: "7200"
 internal_dns_soa_expire: "3600000"
 internal_dns_soa_ttl: "3600"
 
-# NSD – OpenBSD (base or package)
-# NSD is in base (/usr/sbin/nsd, default config /var/nsd/etc/nsd.conf). Set package name only if using a port.
-internal_dns_nsd_package: ""
-internal_dns_nsd_conf: "/var/nsd/etc/nsd.conf"
-internal_dns_nsd_port: 5353
+# Knot DNS – OpenBSD (package)
+internal_dns_knot_package: "knot"
+internal_dns_knot_conf: "/etc/knot/knot.conf"
+internal_dns_knot_conf_dir: "/etc/knot"
+internal_dns_knot_zone_dir: "/var/db/knot"
+internal_dns_knot_storage_dir: "/var/db/knot/storage"
+internal_dns_knot_port: 5353
 internal_dns_unbound_conf: "/var/unbound/etc/unbound.conf"
 internal_dns_unbound_deny: "/var/unbound/etc/adblock.conf"
-internal_dns_nsd_conf_dir: "/var/nsd/etc"
-internal_dns_nsd_zone_dir: "/var/nsd/zones"
-internal_dns_nsd_run_dir: "/var/nsd/run"
