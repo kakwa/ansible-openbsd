@@ -87,6 +87,32 @@
     group: "{{ openldap_group }}"
     recurse: true
 
+# OpenBSD: patch MDB config in slapd.d so no-writemap is set even when slapd is down (e.g. after writemap crash)
+- name: Find MDB database LDIF in slapd.d
+  ansible.builtin.find:
+    paths: /etc/openldap/slapd.d
+    recurse: true
+    patterns: "*mdb*.ldif"
+  register: openldap_mdb_ldif_files
+  when: slapd_config_exists.stat.exists
+
+- name: Disable writemap in slapd.d MDB LDIF (replace existing writemap)
+  ansible.builtin.replace:
+    path: "{{ item.path }}"
+    regexp: '^olcDbEnvFlags: writemap'
+    replace: 'olcDbEnvFlags: no-writemap'
+  loop: "{{ openldap_mdb_ldif_files.files | default([]) }}"
+  when: slapd_config_exists.stat.exists and openldap_mdb_ldif_files.matched | default(0) > 0
+
+- name: Add olcDbEnvFlags no-writemap to slapd.d MDB LDIF if missing
+  ansible.builtin.lineinfile:
+    path: "{{ item.path }}"
+    line: 'olcDbEnvFlags: no-writemap'
+    insertafter: '^olcDbDirectory:'
+    state: present
+  loop: "{{ openldap_mdb_ldif_files.files | default([]) }}"
+  when: slapd_config_exists.stat.exists and openldap_mdb_ldif_files.matched | default(0) > 0
+
 - name: Create OpenLDAP SSL directory
   file:
     path: "{{ openldap_ssl_dir }}"
