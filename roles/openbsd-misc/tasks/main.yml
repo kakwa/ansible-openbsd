@@ -1,6 +1,21 @@
 ---
 # Misc OpenBSD-specific tasks (e.g. doas, sysctl, rc.conf)
 # Extend as needed.
+
+- name: Stop and disable dhcpleased
+  ansible.builtin.service:
+    name: dhcpleased
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Stop and disable slaacd
+  ansible.builtin.service:
+    name: slaacd
+    state: stopped
+    enabled: false
+  failed_when: false
+
 - name: Ensure doas.conf has required rules
   ansible.builtin.lineinfile:
     path: /etc/doas.conf

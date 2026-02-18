@@ -1,5 +1,5 @@
 ---
-# openbsd-nginx: install nginx, self-signed SSL vhosts for ldapcherry and dnscherry
+# openbsd-nginx: install nginx, self-signed SSL vhost for ldapcherry
 - name: Install nginx (OpenBSD)
   community.general.openbsd_pkg:
     name: nginx
@@ -42,37 +42,6 @@
     group: wheel
     mode: "0644"
   when: nginx_ldapcherry_enable | bool
-  notify: Reload nginx
-
-# --- DnsCherry vhost (self-signed SSL) ---
-- name: Ensure SSL dir for dnscherry vhost
-  ansible.builtin.file:
-    path: "{{ nginx_dnscherry_ssl_dir }}"
-    state: directory
-    mode: "0750"
-    owner: root
-    group: wheel
-  when: nginx_dnscherry_enable | bool
-
-- name: Generate self-signed cert for dnscherry vhost
-  ansible.builtin.command:
-    cmd: >
-      openssl req -x509 -nodes -days {{ nginx_dnscherry_ssl_valid_days }}
-      -newkey rsa:2048
-      -keyout {{ nginx_dnscherry_ssl_key }}
-      -out {{ nginx_dnscherry_ssl_cert }}
-      -subj "/CN={{ nginx_dnscherry_ssl_cn }}"
-    creates: "{{ nginx_dnscherry_ssl_cert }}"
-  when: nginx_dnscherry_enable | bool
-
-- name: Deploy nginx vhost for dnscherry
-  ansible.builtin.template:
-    src: nginx-dnscherry.conf.j2
-    dest: "{{ nginx_config_dir }}/vhosts.d/dnscherry.conf"
-    owner: root
-    group: wheel
-    mode: "0644"
-  when: nginx_dnscherry_enable | bool
   notify: Reload nginx
 
 # --- Include vhosts in nginx.conf ---

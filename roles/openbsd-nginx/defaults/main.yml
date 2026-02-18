@@ -1,5 +1,5 @@
 ---
-# openbsd-nginx: nginx on OpenBSD with vhosts for ldapcherry and dnscherry (self-signed SSL)
+# openbsd-nginx: nginx on OpenBSD with vhost for ldapcherry (self-signed SSL)
 
 nginx_config_dir: "/etc/nginx"
 nginx_ssl_base_dir: "{{ nginx_config_dir }}/ssl"
@@ -14,13 +14,3 @@ nginx_ldapcherry_ssl_cert: "{{ nginx_ldapcherry_ssl_dir }}/cert.pem"
 nginx_ldapcherry_ssl_key: "{{ nginx_ldapcherry_ssl_dir }}/key.pem"
 nginx_ldapcherry_ssl_cn: "{{ nginx_ldapcherry_server_name }}"
 nginx_ldapcherry_ssl_valid_days: 3650
-
-# --- DnsCherry vhost (use port 8081 if ldapcherry also uses 8080 on same host) ---
-nginx_dnscherry_enable: true
-nginx_dnscherry_server_name: "dns.int.kakwalab.ovh"
-nginx_dnscherry_backend: "127.0.0.1:8081"
-nginx_dnscherry_ssl_dir: "{{ nginx_ssl_base_dir }}/dnscherry"
-nginx_dnscherry_ssl_cert: "{{ nginx_dnscherry_ssl_dir }}/cert.pem"
-nginx_dnscherry_ssl_key: "{{ nginx_dnscherry_ssl_dir }}/key.pem"
-nginx_dnscherry_ssl_cn: "{{ nginx_dnscherry_server_name }}"
-nginx_dnscherry_ssl_valid_days: 3650
