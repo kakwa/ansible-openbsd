@@ -3,4 +3,3 @@
   ansible.builtin.service:
     name: nginx
     state: reloaded
-  when: ansible_facts.os_family == "OpenBSD"

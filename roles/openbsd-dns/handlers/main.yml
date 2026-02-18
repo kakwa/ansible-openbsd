@@ -3,10 +3,8 @@
   ansible.builtin.service:
     name: knot
     state: reloaded
-  when: ansible_facts.os_family == "OpenBSD"
 
 - name: Reload unbound
   ansible.builtin.service:
     name: unbound
     state: reloaded
-  when: ansible_facts.os_family == "OpenBSD"

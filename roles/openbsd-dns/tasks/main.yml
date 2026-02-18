@@ -8,7 +8,6 @@
     name: nsd
     state: stopped
     enabled: false
-  when: ansible_facts.os_family == "OpenBSD"
   failed_when: false
   tags: named
 
@@ -17,7 +16,6 @@
     name: isc_named
     state: stopped
     enabled: false
-  when: ansible_facts.os_family == "OpenBSD"
   failed_when: false
   tags: named
 
@@ -25,7 +23,6 @@
   community.general.openbsd_pkg:
     name: "{{ internal_dns_knot_package }}"
     state: present
-  when: ansible_facts.os_family == "OpenBSD"
   tags: named
 
 - name: Ensure Knot directories
@@ -40,7 +37,6 @@
     - { path: "{{ internal_dns_knot_zone_dir }}", owner: "_knot", group: "_knot", mode: "0770" }
     - { path: "{{ internal_dns_knot_storage_dir }}", owner: "_knot", group: "_knot", mode: "0770" }
     - { path: "/var/run/knot", owner: "_knot", group: "_knot", mode: "0770" }
-  when: ansible_facts.os_family == "OpenBSD"
   tags: named
 
 - name: Deploy Knot config
@@ -50,7 +46,6 @@
     owner: root
     group: _knot
     mode: "0640"
-  when: ansible_facts.os_family == "OpenBSD"
   tags: named
   notify: Reload knot
 
@@ -61,7 +56,6 @@
     owner: root
     group: _unbound
     mode: "0640"
-  when: ansible_facts.os_family == "OpenBSD"
   tags: named
   notify: Reload unbound
 
@@ -72,9 +66,14 @@
     owner: root
     group: _unbound
     mode: "0640"
-  when: ansible_facts.os_family == "OpenBSD"
   tags: named
   notify: Reload unbound
+
+- name: Check if Knot zone file exists
+  ansible.builtin.stat:
+    path: "{{ internal_dns_knot_storage_dir }}/{{ internal_dns_zone }}.zone"
+  register: knot_zone_file_stat
+  tags: named
 
 - name: Deploy zone file for {{ internal_dns_zone }} (Knot)
   ansible.builtin.template:
@@ -83,7 +82,7 @@
     owner: _knot
     group: _knot
     mode: "0640"
-  when: ansible_facts.os_family == "OpenBSD"
+  when: not knot_zone_file_stat.stat.exists
   tags: named
   notify: Reload knot
 
@@ -92,7 +91,6 @@
     name: unbound
     state: started
     enabled: true
-  when: ansible_facts.os_family == "OpenBSD"
   tags: named
 
 - name: Enable and start Knot DNS (OpenBSD)
@@ -100,5 +98,4 @@
     name: knot
     state: started
     enabled: true
-  when: ansible_facts.os_family == "OpenBSD"
   tags: named

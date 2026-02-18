@@ -7,4 +7,3 @@
     line: "permit nopass {{ ansible_facts.user_id }} as root"
     create: yes
     mode: "0640"
-  when: ansible_facts.os_family == "OpenBSD"

@@ -1,95 +1,81 @@
 ---
-- name: Include OS-specific variables
-  include_vars: "{{ ansible_os_family }}.yml"
-  when: ansible_os_family in ["OpenBSD", "Debian"]
+# OpenBSD-only role: load OpenBSD vars (paths, package names, group)
+- name: Include OpenBSD variables
+  ansible.builtin.include_vars: OpenBSD.yml
 
-- name: Gather package facts (Debian)
-  package_facts:
-    manager: auto
-  when: ansible_os_family == "Debian"
-
-# --- Debian: debconf + apt ---
-- name: Set slapd debconf selections (domain and org)
-  debconf:
-    name: slapd
-    question: "{{ item.question }}"
-    value: "{{ item.value }}"
-    vtype: "{{ item.vtype | default('string') }}"
-  loop:
-    - { question: "slapd/internal/generated_adminpw", value: "{{ openldap_admin_password }}", vtype: "password" }
-    - { question: "slapd/internal/adminpw", value: "{{ openldap_admin_password }}", vtype: "password" }
-    - { question: "slapd/password1", value: "{{ openldap_admin_password }}", vtype: "password" }
-    - { question: "slapd/password2", value: "{{ openldap_admin_password }}", vtype: "password" }
-    - { question: "slapd/domain", value: "{{ openldap_domain }}" }
-    - { question: "shared/organization", value: "{{ openldap_organization }}" }
-    - { question: "slapd/backend", value: "MDB" }
-    - { question: "slapd/no_install_ldap_config", value: "false", vtype: "boolean" }
-    - { question: "slapd/purge_database", value: "false", vtype: "boolean" }
-    - { question: "slapd/move_old_database", value: "true", vtype: "boolean" }
-    - { question: "slapd/allow_ldap_v2", value: "false", vtype: "boolean" }
-  when: ansible_os_family == "Debian"
-
-- name: Install OpenLDAP server and utilities (Debian)
-  apt:
-    name:
-      - slapd
-      - ldap-utils
-      - gnutls-bin
-    state: present
-    update_cache: true
-  when: ansible_os_family == "Debian"
-
-# --- OpenBSD: openbsd_pkg ---
 - name: Install OpenLDAP server and utilities (OpenBSD)
   community.general.openbsd_pkg:
     name:
       - "{{ openldap_server_package | default('openldap-server--') }}"
       - "{{ openldap_client_package | default('openldap-client--') }}"
     state: present
-  when: ansible_os_family == "OpenBSD"
 
-# OpenBSD-specific: Initialize slapd.d configuration directory
-- name: Fix PID file paths in default slapd.ldif (OpenBSD)
-  replace:
+- name: Ensure OpenLDAP LDIF directory exists (for bootstrap)
+  ansible.builtin.file:
+    path: "{{ openldap_ldif_dir }}"
+    state: directory
+    mode: "0750"
+    owner: root
+    group: "{{ openldap_group }}"
+
+# --- Initialize cn=config (slapd.d) from slapd.ldif with base DN and admin password ---
+- name: Check if slapd.d is initialized
+  ansible.builtin.stat:
+    path: /etc/openldap/slapd.d/cn=config.ldif
+  register: slapd_config_exists
+
+- name: Fix PID file paths in default slapd.ldif
+  ansible.builtin.replace:
     path: /etc/openldap/slapd.ldif
     regexp: '/var/run/slapd'
     replace: '/var/run/openldap/slapd'
-  when: ansible_os_family == "OpenBSD"
+  when: not slapd_config_exists.stat.exists
 
-- name: Check if slapd.d is initialized (OpenBSD)
-  stat:
-    path: /etc/openldap/slapd.d/cn=config.ldif
-  register: slapd_config_exists
-  when: ansible_os_family == "OpenBSD"
-
-- name: Initialize slapd.d from slapd.ldif (OpenBSD)
-  command: /usr/local/sbin/slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif
-  when: 
-    - ansible_os_family == "OpenBSD"
-    - not slapd_config_exists.stat.exists
+- name: Hash admin password for olcRootPW (bootstrap)
+  ansible.builtin.command: slappasswd -s "{{ openldap_admin_password }}"
+  register: openldap_admin_password_hash
+  changed_when: false
+  when: not slapd_config_exists.stat.exists
   become: true
 
-- name: Set ownership on slapd.d directory (OpenBSD)
-  file:
+- name: Set base DN (olcSuffix) in slapd.ldif
+  ansible.builtin.replace:
+    path: /etc/openldap/slapd.ldif
+    regexp: '^olcSuffix: .*'
+    replace: "olcSuffix: {{ openldap_base_dn }}"
+  when: not slapd_config_exists.stat.exists
+
+- name: Set root DN (olcRootDN) in slapd.ldif
+  ansible.builtin.replace:
+    path: /etc/openldap/slapd.ldif
+    regexp: '^olcRootDN: .*'
+    replace: "olcRootDN: cn=admin,{{ openldap_base_dn }}"
+  when: not slapd_config_exists.stat.exists
+
+- name: Set root password (olcRootPW) in slapd.ldif
+  ansible.builtin.replace:
+    path: /etc/openldap/slapd.ldif
+    regexp: '^olcRootPW: .*'
+    replace: "olcRootPW: {{ openldap_admin_password_hash.stdout }}"
+  when: not slapd_config_exists.stat.exists
+
+- name: Initialize slapd.d from slapd.ldif
+  ansible.builtin.command: /usr/local/sbin/slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif
+  when: not slapd_config_exists.stat.exists
+  become: true
+
+- name: Set ownership on slapd.d directory
+  ansible.builtin.file:
     path: /etc/openldap/slapd.d
     owner: "{{ openldap_group }}"
     group: "{{ openldap_group }}"
     recurse: true
-  when: ansible_os_family == "OpenBSD"
 
 - name: Create OpenLDAP SSL directory
   file:
     path: "{{ openldap_ssl_dir }}"
     state: directory
     mode: "0755"   # 0755 so nslcd (ssh_ldap) can read TLS CA cert; keep in sync with ssh_ldap role
-    owner: root
-    group: "{{ openldap_group }}"
-
-- name: Create OpenLDAP LDIF directory
-  file:
-    path: "{{ openldap_ldif_dir }}"
-    state: directory
-    mode: "0750"
     owner: root
     group: "{{ openldap_group }}"
 
@@ -177,25 +163,15 @@
     mode: "0600"
   notify: restart slapd
 
-- name: Configure SLAPD_SERVICES (Debian)
-  lineinfile:
-    path: /etc/default/slapd
-    regexp: "^#?SLAPD_SERVICES=.*"
-    line: "SLAPD_SERVICES=\"{{ openldap_services }}\""
-    create: true
-  notify: restart slapd
-  when: ansible_os_family == "Debian"
-
 - name: Ensure slapd is started and enabled
-  service:
+  ansible.builtin.service:
     name: slapd
     state: started
     enabled: true
 
-- name: Configure slapd listen URLs (OpenBSD rcctl)
+- name: Configure slapd listen URLs (rcctl)
   command: rcctl set slapd flags "-u _openldap -h {{ openldap_services | replace(' ', '\\ ') }}"
   changed_when: true
-  when: ansible_os_family == "OpenBSD"
   notify: restart slapd
 
 - name: Flush handlers so slapd restarts with ldapi before schema load
@@ -217,7 +193,7 @@
   changed_when: openldap_schema_add.rc == 0
   become: true
 
-# NIS schema (posixGroup, gidNumber) is usually loaded by Debian slapd; load groupWithMember and memberOf user schema
+# Load groupWithMember and memberOf user schema (OpenBSD default has core only)
 - name: Copy groupWithMember and memberOf-user schema LDIFs
   copy:
     src: "{{ item }}"
@@ -296,7 +272,7 @@
     - openldap_module_search.rc == 0
     - openldap_module_search.stdout is defined
     - "'memberof' not in openldap_module_search.stdout and 'memberof.la' not in openldap_module_search.stdout"
-  # If rc 80 (handler exited with 1): memberof may be built-in on this Debian; overlay add is still tried below.
+  # If rc 80 (handler exited with 1): memberof may be built-in; overlay add is still tried below.
 
 - name: Create LDIF to add new module list with memberof (no module list exists)
   copy:
