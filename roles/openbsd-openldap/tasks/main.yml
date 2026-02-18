@@ -24,6 +24,19 @@
     path: /etc/openldap/slapd.d/cn=config.ldif
   register: slapd_config_exists
 
+- name: Check if slapd.ldif exists
+  ansible.builtin.stat:
+    path: /etc/openldap/slapd.ldif
+  register: slapd_ldif_exists
+  when: not slapd_config_exists.stat.exists
+
+- name: Deploy default slapd.ldif from role template (OpenBSD paths, no-writemap)
+  ansible.builtin.template:
+    src: slapd.ldif.j2
+    dest: /etc/openldap/slapd.ldif
+    mode: "0600"
+  when: not slapd_config_exists.stat.exists and not slapd_ldif_exists.stat.exists
+
 - name: Fix PID file paths in default slapd.ldif
   ansible.builtin.replace:
     path: /etc/openldap/slapd.ldif
@@ -73,6 +86,13 @@
     line: 'olcDbEnvFlags: no-writemap'
     insertafter: '^olcDbDirectory:'
     state: present
+  when: not slapd_config_exists.stat.exists
+
+- name: Ensure slapd.d config directory exists (required by slapadd -F)
+  ansible.builtin.file:
+    path: /etc/openldap/slapd.d
+    state: directory
+    mode: "0750"
   when: not slapd_config_exists.stat.exists
 
 - name: Initialize slapd.d from slapd.ldif
