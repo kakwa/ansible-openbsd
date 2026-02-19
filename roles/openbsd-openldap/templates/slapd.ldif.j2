@@ -11,8 +11,8 @@ olcPidFile: /var/run/openldap/slapd.pid
 dn: cn=module,cn=config
 objectClass: olcModuleList
 cn: module
-olcModulepath: {{ openldap_module_path }}
-olcModuleload: back_mdb.la
+olcModulePath: {{ openldap_module_path }}
+olcModuleLoad: back_mdb.la
 
 dn: cn=schema,cn=config
 objectClass: olcSchemaConfig
@@ -33,6 +33,8 @@ olcRootDN: cn=Manager,dc=my-domain,dc=com
 olcRootPW: secret
 olcDbDirectory: /var/openldap-data
 olcDbIndex: objectClass eq
+# Allow directory admin (olcRootDN) to modify this config entry over LDAPS; EXTERNAL (ldapi) keeps manage.
+olcAccess: to * by dn.exact="cn=admin,{{ openldap_base_dn }}" manage by dn.exact="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage by * none
 
 dn: olcDatabase=monitor,cn=config
 objectClass: olcDatabaseConfig

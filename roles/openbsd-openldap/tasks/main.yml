@@ -18,6 +18,14 @@
     owner: root
     group: "{{ openldap_group }}"
 
+- name: Ensure MDB data directory exists (olcDbDirectory; slapd must own for writemap-free open)
+  ansible.builtin.file:
+    path: /var/openldap-data
+    state: directory
+    mode: "0750"
+    owner: "{{ openldap_group }}"
+    group: "{{ openldap_group }}"
+
 # --- Initialize cn=config (slapd.d) from slapd.ldif with base DN and admin password ---
 - name: Check if slapd.d is initialized
   ansible.builtin.stat:
@@ -112,7 +120,20 @@
     mode: "0600"
   when: not slapd_conf_exists.stat.exists
 
-# OpenBSD: remove writemap from MDB config in slapd.d when slapd is down (e.g. after writemap crash)
+# OpenBSD: slapcat with slapd.conf triggers MDB "forcing writemap" -> Operation not permitted (W^X).
+# Install wrapper that uses slapd.d so slapcat works like the running daemon.
+- name: Install slapcat wrapper (slapcat -F slapd.d) for OpenBSD W^X / no-writemap
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      exec /usr/local/sbin/slapcat -F /etc/openldap/slapd.d "$@"
+    dest: /usr/local/bin/slapcat-ldap
+    mode: "0755"
+  become: true
+
+# OpenBSD: remove writemap from MDB config in slapd.d when slapd is down (e.g. after writemap crash).
+# slapcat: plain "slapcat" uses slapd.conf and MDB may force writemap -> "Operation not permitted" (W^X).
+# Use "slapcat -F /etc/openldap/slapd.d" so config matches slapd (no writemap). Else use ldapsearch.
 - name: Find MDB database LDIF in slapd.d
   ansible.builtin.find:
     paths: /etc/openldap/slapd.d
@@ -227,8 +248,21 @@
     state: started
     enabled: true
 
+# OpenBSD: slapd must run as root to bind to privileged ports 389 (ldap) and 636 (ldaps).
+# Running as _openldap causes "bind failed errno=13 (Permission denied)".
+- name: Set slapd user to root (OpenBSD privileged ports)
+  command: rcctl set slapd user root
+  changed_when: true
+  notify: restart slapd
+
 - name: Configure slapd listen URLs (rcctl)
-  command: rcctl set slapd flags "-u _openldap -h {{ openldap_services | replace(' ', '\\ ') }}"
+  ansible.builtin.command:
+    argv:
+      - rcctl
+      - set
+      - slapd
+      - flags
+      - "-h '{{ openldap_services }}'"
   changed_when: true
   notify: restart slapd
 
@@ -497,7 +531,12 @@
   failed_when: false
   changed_when: false
 
-- name: Create base OUs (people, groups) in LDAP
+# Build list of existing OU names (ou attr can be list from LDAP; flatten for safe 'in' check).
+- name: Set list of existing OU names (people, groups, services)
+  ansible.builtin.set_fact:
+    openldap_existing_ou_names: "{{ (openldap_existing_ous.results | default([])) | map(attribute='ou') | flatten | list }}"
+
+- name: Create base OUs (people, groups, services) in LDAP if missing
   community.general.ldap_entry:
     dn: "ou={{ item.ou }},{{ openldap_base_dn }}"
     objectClass: organizationalUnit
@@ -512,7 +551,7 @@
     - { ou: "people" }
     - { ou: "groups" }
     - { ou: "services" }
-  when: item.ou not in (openldap_existing_ous.results | default([]) | map(attribute='ou') | flatten | list)
+  when: item.ou not in (openldap_existing_ou_names | default([]))
   ignore_errors: true
   register: openldap_ou_result
   changed_when: openldap_ou_result is not failed

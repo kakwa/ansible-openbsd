@@ -1,4 +1,7 @@
-# Minimal slapd.conf for CLI tools (slapcat, etc.). slapd uses OLC (slapd.d) at runtime.
+# Minimal slapd.conf for CLI tools. slapd uses OLC (slapd.d) at runtime.
+# On OpenBSD, plain "slapcat" may fail with "forcing writemap" / "Operation not permitted"
+# (MDB forces writemap when using this file on systems without unified buffer cache; W^X blocks it).
+# Use: slapcat -F /etc/openldap/slapd.d   (same config as slapd; writemap removed there).
 # See slapd.conf(5). This file should NOT be world readable.
 
 pidfile		/var/run/openldap/slapd.pid
