@@ -7,6 +7,11 @@ objectClass: olcGlobal
 cn: config
 olcArgsFile: /var/run/openldap/slapd.args
 olcPidFile: /var/run/openldap/slapd.pid
+olcTLSCACertificateFile: {{ openldap_ca_cert }}
+olcTLSCertificateFile: {{ openldap_server_cert }}
+olcTLSCertificateKeyFile: {{ openldap_server_key }}
+olcLocalSSF: 71
+olcSecurity: tls=1
 
 dn: cn=module,cn=config
 objectClass: olcModuleList
@@ -28,16 +33,16 @@ objectClass: olcDatabaseConfig
 objectClass: olcMdbConfig
 olcDatabase: mdb
 olcDbMaxSize: 1073741824
-olcSuffix: dc=my-domain,dc=com
-olcRootDN: cn=Manager,dc=my-domain,dc=com
-olcRootPW: secret
+olcSuffix: {{ openldap_base_dn }}
+olcRootDN: cn=admin,{{ openldap_base_dn }}
+olcRootPW: {{ openldap_admin_password_hash.stdout }}
 olcDbDirectory: /var/openldap-data
 olcDbIndex: objectClass eq
 # Allow directory admin (olcRootDN) to modify this config entry over LDAPS; EXTERNAL (ldapi) keeps manage.
-olcAccess: to * by dn.exact="cn=admin,{{ openldap_base_dn }}" manage by dn.exact="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage by * none
+olcAccess: {0}to *  by * none
+olcAccess: {1}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * none
+olcAccess: {3}to * by dn.exact="cn=admin,{{ openldap_base_dn }}" manage by dn.exact="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage by * none
 
 dn: olcDatabase=monitor,cn=config
 objectClass: olcDatabaseConfig
 olcDatabase: monitor
-olcRootDN: cn=config
-olcMonitoring: FALSE

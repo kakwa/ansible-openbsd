@@ -1,0 +1,81 @@
+---
+# OpenLDAP OUs and groups: people, groups, services; default and role groups
+# Tag: openldap_ous_groups
+- name: Get existing OUs under base DN
+  community.general.ldap_search:
+    dn: "{{ openldap_base_dn }}"
+    scope: "onelevel"
+    filter: "(objectClass=organizationalUnit)"
+    attrs: ["ou"]
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  register: openldap_existing_ous
+  failed_when: false
+  changed_when: false
+
+# Build list of existing OU names (ou attr can be list from LDAP; flatten for safe 'in' check).
+- name: Set list of existing OU names (people, groups, services)
+  ansible.builtin.set_fact:
+    openldap_existing_ou_names: "{{ (openldap_existing_ous.results | default([])) | map(attribute='ou') | flatten | list }}"
+
+- name: Create base OUs (people, groups, services) in LDAP if missing
+  community.general.ldap_entry:
+    dn: "ou={{ item.ou }},{{ openldap_base_dn }}"
+    objectClass: organizationalUnit
+    attributes:
+      ou: "{{ item.ou }}"
+    state: present
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  loop:
+    - { ou: "people" }
+    - { ou: "groups" }
+    - { ou: "services" }
+  when: item.ou not in (openldap_existing_ou_names | default([]))
+  ignore_errors: true
+  register: openldap_ou_result
+  changed_when: openldap_ou_result is not failed
+
+- name: Create default groups cn=users and cn=admins for ldapcherry (posixGroup + GIDs)
+  community.general.ldap_entry:
+    dn: "cn={{ item }},ou=groups,{{ openldap_base_dn }}"
+    objectClass:
+      - posixGroup
+      - groupWithMember
+    attributes:
+      cn: "{{ item }}"
+      gidNumber: "{{ openldap_group_gids[item] | string }}"
+      member: ["cn=admin,{{ openldap_base_dn }}"]
+    state: present
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  loop:
+    - users
+    - admins
+  ignore_errors: true
+  register: openldap_default_groups_result
+
+- name: Create groups ssh-admins, k8s-admins, ssh-users, k8s-users (posixGroup + GIDs, ldapcherry + SSH/sudo)
+  community.general.ldap_entry:
+    dn: "cn={{ item }},ou=groups,{{ openldap_base_dn }}"
+    objectClass:
+      - posixGroup
+      - groupWithMember
+    attributes:
+      cn: "{{ item }}"
+      gidNumber: "{{ openldap_group_gids[item] | string }}"
+      member: ["cn=admin,{{ openldap_base_dn }}"]
+    state: present
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  loop: "{{ openldap_role_groups }}"
+  ignore_errors: true
+  register: openldap_role_groups_result

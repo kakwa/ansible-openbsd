@@ -1,0 +1,190 @@
+---
+# OpenLDAP default user (carpenti): create, SSH keys, group membership, memberOf refresh
+# Tag: openldap_default_user
+# Optional: create default user (carpenti) in ou=people and add to cn=users + cn=admins (only if user does not exist)
+- name: Check if default user (carpenti) exists in LDAP
+  community.general.ldap_search:
+    dn: "ou=people,{{ openldap_base_dn }}"
+    filter: "(uid={{ openldap_default_user_uid }})"
+    scope: "onelevel"
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  register: openldap_default_user_search
+  when: openldap_default_user_create | default(false) | bool
+
+- name: Hash password for default user (carpenti)
+  ansible.builtin.command: slappasswd -s "{{ openldap_default_user_password }}"
+  register: openldap_default_user_password_hash
+  changed_when: false
+  when: openldap_default_user_create | default(false) | bool and (openldap_default_user_search.results | default([]) | length == 0)
+
+- name: Create default user (carpenti) in ou=people (if missing)
+  community.general.ldap_entry:
+    dn: "uid={{ openldap_default_user_uid }},ou=people,{{ openldap_base_dn }}"
+    objectClass:
+      - top
+      - person
+      - organizationalPerson
+      - inetOrgPerson
+      - posixAccount
+    attributes:
+      uid: "{{ openldap_default_user_uid }}"
+      cn: "{{ openldap_default_user_cn }}"
+      sn: "{{ openldap_default_user_sn }}"
+      uidNumber: "{{ openldap_default_user_uid_number | string }}"
+      gidNumber: "{{ openldap_default_user_gid_number | string }}"
+      homeDirectory: "{{ openldap_default_user_home }}"
+      loginShell: "{{ openldap_default_user_shell }}"
+      userPassword: "{{ openldap_default_user_password_hash.stdout }}"
+    state: present
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  register: openldap_default_user_created
+  when: openldap_default_user_create | default(false) | bool and (openldap_default_user_search.results | default([]) | length == 0)
+
+- name: Deploy LDIF to add sshPublicKey to default user
+  ansible.builtin.template:
+    src: add-ssh-key.ldif.j2
+    dest: "{{ openldap_ldif_dir }}/add-ssh-key-{{ openldap_default_user_uid }}.ldif"
+    mode: "0600"
+  when: >
+    openldap_default_user_create | default(false) | bool
+    and (openldap_default_user_ssh_public_keys | default([]) | length > 0)
+    and ((openldap_default_user_search.results | default([]) | length > 0)
+         or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+
+- name: Add SSH public keys to default user via ldapi (OpenSSH LPK schema)
+  ansible.builtin.command: ldapmodify -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/add-ssh-key-{{ openldap_default_user_uid }}.ldif
+  register: openldap_default_user_ssh_add
+  failed_when: false
+  changed_when: openldap_default_user_ssh_add.rc == 0
+  become: true
+  when: >
+    openldap_default_user_create | default(false) | bool
+    and (openldap_default_user_ssh_public_keys | default([]) | length > 0)
+    and ((openldap_default_user_search.results | default([]) | length > 0)
+         or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+
+- name: Add SSH public keys to default user via LDAPS (ensure key present)
+  community.general.ldap_attrs:
+    dn: "uid={{ openldap_default_user_uid }},ou=people,{{ openldap_base_dn }}"
+    state: present
+    attributes:
+      objectClass: ["ldapPublicKey"]
+      sshPublicKey: "{{ openldap_default_user_ssh_public_keys }}"
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  when: >
+    openldap_default_user_create | default(false) | bool
+    and (openldap_default_user_ssh_public_keys | default([]) | length > 0)
+    and ((openldap_default_user_search.results | default([]) | length > 0)
+         or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+  register: openldap_default_user_ssh_ldaps
+  failed_when: false
+  changed_when: openldap_default_user_ssh_ldaps is not failed
+
+- name: Add default user (carpenti) to group cn=users
+  community.general.ldap_attrs:
+    dn: "cn=users,ou=groups,{{ openldap_base_dn }}"
+    state: present
+    attributes:
+      member: ["cn=admin,{{ openldap_base_dn }}", "uid={{ openldap_default_user_uid }},ou=people,{{ openldap_base_dn }}"]
+      memberUid: ["{{ openldap_default_user_uid }}"]
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  when: >
+    openldap_default_user_create | default(false) | bool
+    and ((openldap_default_user_search.results | default([]) | length > 0)
+         or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+
+- name: Add default user (carpenti) to group cn=admins
+  community.general.ldap_attrs:
+    dn: "cn=admins,ou=groups,{{ openldap_base_dn }}"
+    state: present
+    attributes:
+      member: ["cn=admin,{{ openldap_base_dn }}", "uid={{ openldap_default_user_uid }},ou=people,{{ openldap_base_dn }}"]
+      memberUid: ["{{ openldap_default_user_uid }}"]
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  when: >
+    openldap_default_user_create | default(false) | bool
+    and ((openldap_default_user_search.results | default([]) | length > 0)
+         or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+
+- name: Add default user (carpenti) to all role groups (ssh-admins, k8s-admins, ssh-users, k8s-users)
+  community.general.ldap_attrs:
+    dn: "cn={{ item }},ou=groups,{{ openldap_base_dn }}"
+    state: present
+    attributes:
+      member: ["cn=admin,{{ openldap_base_dn }}", "uid={{ openldap_default_user_uid }},ou=people,{{ openldap_base_dn }}"]
+      memberUid: ["{{ openldap_default_user_uid }}"]
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false
+  loop: "{{ openldap_role_groups }}"
+  when: >
+    openldap_default_user_create | default(false) | bool
+    and ((openldap_default_user_search.results | default([]) | length > 0)
+         or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+
+# memberOf overlay only writes memberOf when the user entry has an objectClass that allows it (userWithMemberOf).
+- name: Create LDIF to add userWithMemberOf to existing default user
+  ansible.builtin.copy:
+    content: |
+      dn: uid={{ openldap_default_user_uid }},ou=people,{{ openldap_base_dn }}
+      changetype: modify
+      add: objectClass
+      objectClass: userWithMemberOf
+    dest: "{{ openldap_ldif_dir }}/memberof-add-oc.ldif"
+    mode: "0600"
+  when: openldap_default_user_create | default(false) | bool and ((openldap_default_user_search.results | default([]) | length > 0) or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+
+- name: Ensure default user has userWithMemberOf for memberOf overlay
+  ansible.builtin.command: >
+    ldapmodify -H ldaps://127.0.0.1:636/ -x
+    -D "cn=admin,{{ openldap_base_dn }}" -w "{{ openldap_admin_password }}"
+    -f "{{ openldap_ldif_dir }}/memberof-add-oc.ldif"
+  environment:
+    LDAPTLS_REQCERT: "never"
+  become: true
+  register: openldap_memberof_oc_add
+  failed_when: false
+  changed_when: openldap_memberof_oc_add.rc == 0
+  when: openldap_default_user_create | default(false) | bool and ((openldap_default_user_search.results | default([]) | length > 0) or (openldap_default_user_created is defined and openldap_default_user_created is changed))
+
+# Touch each group (replace cn with same value) so memberOf overlay updates memberOf on user entries.
+- name: Create LDIFs to touch groups (trigger memberOf overlay)
+  ansible.builtin.copy:
+    content: |
+      dn: cn={{ item }},ou=groups,{{ openldap_base_dn }}
+      changetype: modify
+      replace: cn
+      cn: {{ item }}
+    dest: "{{ openldap_ldif_dir }}/memberof-touch-{{ item }}.ldif"
+    mode: "0600"
+  loop: "{{ ['users', 'admins'] + openldap_role_groups }}"
+  become: true
+
+- name: Touch groups to refresh memberOf on user entries
+  ansible.builtin.command: >
+    ldapmodify -H ldaps://127.0.0.1:636/ -x
+    -D "cn=admin,{{ openldap_base_dn }}" -w "{{ openldap_admin_password }}"
+    -f "{{ openldap_ldif_dir }}/memberof-touch-{{ item }}.ldif"
+  environment:
+    LDAPTLS_REQCERT: "never"
+  become: true
+  loop: "{{ ['users', 'admins'] + openldap_role_groups }}"
+  register: openldap_memberof_touch
+  failed_when: false
+  changed_when: openldap_memberof_touch.rc == 0

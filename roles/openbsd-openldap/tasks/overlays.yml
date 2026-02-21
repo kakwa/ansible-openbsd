@@ -1,0 +1,194 @@
+---
+# OpenLDAP overlays: memberof, ppolicy, ACL, TLS apply
+# Tag: openldap_overlays
+# cn=config is only reachable via ldapi EXTERNAL; LDAPS with cn=admin cannot query it (No such object).
+# When ldapi fails with "Confidentiality required" (rc 13) after TLS is applied, use default MDB DN.
+- name: Get MDB database DN from cn=config (ldapi)
+  ansible.builtin.command: ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config -LLL "(olcDatabase=*mdb*)" dn
+  register: openldap_mdb_search
+  become: true
+  changed_when: false
+  failed_when: openldap_mdb_search.rc != 0 and openldap_mdb_search.rc != 13 and openldap_mdb_search.rc != 32
+
+- name: Set OpenLDAP MDB database DN for overlay
+  ansible.builtin.set_fact:
+    openldap_mdb_dn: "{{ ((openldap_mdb_search.stdout | regex_findall('dn:\\s*(.+)')) + ['olcDatabase={1}mdb,cn=config'])[0] if openldap_mdb_search.rc == 0 else 'olcDatabase={1}mdb,cn=config' }}"
+
+# OpenBSD: remove writemap from MDB (existing slapd.d may have writemap set)
+- name: Create LDIF to delete olcDbEnvFlags on MDB database (OpenBSD W^X compatibility)
+  ansible.builtin.copy:
+    content: |
+      dn: {{ openldap_mdb_dn }}
+      changetype: modify
+      delete: olcDbEnvFlags
+    dest: "{{ openldap_ldif_dir }}/mdb-remove-writemap.ldif"
+    mode: "0600"
+  become: true
+
+- name: Remove olcDbEnvFlags from MDB database (OpenBSD W^X compatibility)
+  ansible.builtin.command: ldapmodify -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/mdb-remove-writemap.ldif
+  register: openldap_mdb_remove_writemap
+  become: true
+  notify: restart slapd
+  failed_when: false
+  changed_when: openldap_mdb_remove_writemap.rc == 0
+
+# memberOf overlay requires the memberof module to be loaded.
+- name: Get module list DN and current olcModuleLoad from cn=config
+  ansible.builtin.command: ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config -LLL "(objectClass=olcModuleList)" dn olcModuleLoad
+  register: openldap_module_search
+  become: true
+  changed_when: false
+  failed_when: openldap_module_search.rc != 0 and openldap_module_search.rc != 32 and openldap_module_search.rc != 13
+
+- name: Set module list DN for memberof (from ldapsearch or default)
+  ansible.builtin.set_fact:
+    openldap_module_dn: "{{ (openldap_module_search.stdout | regex_findall('dn:\\s*(.+)') | first) | default('cn=module{0},cn=config') | trim }}"
+  when:
+    - openldap_module_search.rc == 0
+    - openldap_module_search.stdout is defined
+    - "'memberof' not in openldap_module_search.stdout and 'memberof.la' not in openldap_module_search.stdout"
+
+# Load memberof module; use name without .la to match back_mdb style (slapd resolves to .so).
+- name: Create LDIF to add memberof to existing module list
+  ansible.builtin.copy:
+    content: |
+      dn: {{ openldap_module_dn }}
+      changetype: modify
+      add: olcModuleLoad
+      olcModuleLoad: memberof
+    dest: "{{ openldap_ldif_dir }}/memberof-module.ldif"
+    mode: "0600"
+  become: true
+  when:
+    - openldap_module_search.rc == 0
+    - openldap_module_search.stdout is defined
+    - "'memberof' not in openldap_module_search.stdout and 'memberof.la' not in openldap_module_search.stdout"
+    - openldap_module_dn is defined
+
+- name: Load memberof module (add to existing module list)
+  ansible.builtin.command: ldapmodify -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/memberof-module.ldif
+  register: openldap_memberof_module_add
+  become: true
+  notify: restart slapd
+  failed_when: false
+  changed_when: openldap_memberof_module_add.rc == 0
+  when:
+    - openldap_module_search.rc == 0
+    - openldap_module_search.stdout is defined
+    - "'memberof' not in openldap_module_search.stdout and 'memberof.la' not in openldap_module_search.stdout"
+
+- name: Create LDIF to add new module list with memberof (no module list exists)
+  ansible.builtin.copy:
+    content: |
+      dn: cn=module,cn=config
+      objectClass: olcModuleList
+      cn: module
+      olcModulePath: {{ openldap_module_path }}
+      olcModuleLoad: memberof
+    dest: "{{ openldap_ldif_dir }}/memberof-module-new.ldif"
+    mode: "0600"
+  become: true
+  when: openldap_module_search.rc == 32 or (openldap_module_search.stdout is defined and openldap_module_search.stdout | trim == '')
+
+- name: Add new module list with memberof
+  ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/memberof-module-new.ldif
+  register: openldap_memberof_module_new
+  become: true
+  notify: restart slapd
+  when: openldap_module_search.rc == 32 or (openldap_module_search.stdout is defined and openldap_module_search.stdout | trim == '')
+  failed_when: false
+  changed_when: openldap_memberof_module_new.rc == 0
+
+- name: Flush handlers so slapd restarts with memberof module before overlay add
+  ansible.builtin.meta: flush_handlers
+  when: (openldap_memberof_module_add is defined and openldap_memberof_module_add is changed) or (openldap_memberof_module_new is defined and openldap_memberof_module_new is changed)
+
+- name: Create memberof overlay LDIF
+  ansible.builtin.copy:
+    content: |
+      dn: olcOverlay=memberof,{{ openldap_mdb_dn }}
+      objectClass: olcOverlayConfig
+      objectClass: olcMemberOf
+      olcOverlay: memberof
+      olcMemberOfGroupOC: groupWithMember
+      olcMemberOfMemberAD: member
+      olcMemberOfMemberOfAD: memberOf
+      olcMemberOfRefInt: TRUE
+      olcMemberOfDangling: ignore
+    dest: "{{ openldap_ldif_dir }}/memberof-overlay.ldif"
+    mode: "0600"
+  become: true
+
+- name: Add memberof overlay to MDB database
+  ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/memberof-overlay.ldif
+  register: openldap_memberof_overlay_add
+  failed_when: openldap_memberof_overlay_add.rc != 0 and openldap_memberof_overlay_add.rc != 68 and openldap_memberof_overlay_add.rc != 13 and openldap_memberof_overlay_add.rc != 21
+  changed_when: openldap_memberof_overlay_add.rc == 0
+  become: true
+
+- name: Add memberOf-user schema to cn=config (userWithMemberOf; memberOf attr from overlay)
+  ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/memberof-user.ldif
+  register: openldap_memberof_user_add
+  failed_when: false
+  changed_when: openldap_memberof_user_add.rc == 0
+  become: true
+
+# PPolicy overlay: recognizes password-policy control so slapd stops logging "unrecognized control"
+- name: Create ppolicy overlay LDIF
+  ansible.builtin.copy:
+    content: |
+      dn: olcOverlay=ppolicy,{{ openldap_mdb_dn }}
+      objectClass: olcOverlayConfig
+      objectClass: olcPPolicyConfig
+      olcOverlay: ppolicy
+    dest: "{{ openldap_ldif_dir }}/ppolicy-overlay.ldif"
+    mode: "0600"
+  become: true
+
+- name: Add ppolicy overlay to MDB database
+  ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/ppolicy-overlay.ldif
+  register: openldap_ppolicy_overlay_add
+  failed_when: false
+  changed_when: openldap_ppolicy_overlay_add.rc == 0
+  become: true
+
+# ACL for ssh_ldap read-only account (must run via ldapi before TLS, else "Confidentiality required")
+- name: Check if ACL for ssh_ldap read-only account already exists
+  ansible.builtin.command: ldapsearch -Y EXTERNAL -H ldapi:/// -b "{{ openldap_mdb_dn }}" -LLL olcAccess
+  register: openldap_acl_search
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Create LDIF to add olcAccess for ssh_ldap read-only account
+  ansible.builtin.copy:
+    content: |
+      dn: {{ openldap_mdb_dn }}
+      changetype: modify
+      add: olcAccess
+      olcAccess: to dn.subtree="{{ openldap_base_dn }}" by dn.exact="{{ openldap_ssh_ldap_readonly_dn }}" read
+    dest: "{{ openldap_ldif_dir }}/acl-ssh-ldap-readonly.ldif"
+    mode: "0600"
+  become: true
+
+- name: Apply TLS configuration to slapd (ldapi EXTERNAL)
+  ansible.builtin.command: ldapmodify -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/openldap-tls.ldif
+  register: openldap_tls_apply
+  changed_when: openldap_tls_apply.rc == 0
+  failed_when: false
+  become: true
+
+- name: Add olcLocalSSF via LDAPS (recover when ldapi requires confidentiality)
+  ansible.builtin.copy:
+    content: |
+      dn: cn=config
+      changetype: modify
+      replace: olcLocalSSF
+      olcLocalSSF: 71
+    dest: "{{ openldap_ldif_dir }}/openldap-localssf.ldif"
+    mode: "0600"
+  when: openldap_tls_apply.rc != 0
+
+- name: Flush handlers so slapd restarts with ldaps before OU/group creation
+  ansible.builtin.meta: flush_handlers

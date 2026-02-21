@@ -1,0 +1,48 @@
+---
+# OpenLDAP schema: core, OpenSSH LPK, groupWithMember, memberOf-user (copy only)
+# Tag: openldap_schema
+- block:
+  # Bootstrap from template has no schema include (slapadd rejects include/olcInclude). Load core first.
+  - name: Add core schema to cn=config (required when bootstrap LDIF had no schema include)
+    ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/core.ldif
+    register: openldap_core_schema_add
+    become: true
+    failed_when: false
+    changed_when: openldap_core_schema_add.rc == 0
+
+  # Load OpenSSH LPK schema *before* applying TLS config (olcSecurity/olcLocalSSF),
+  # otherwise ldapi EXTERNAL fails with "Confidentiality required"
+  - name: Load OpenSSH LPK schema (sshPublicKey) into slapd
+    copy:
+      src: openssh-lpk.ldif
+      dest: "{{ openldap_ldif_dir }}/openssh-lpk.ldif"
+      mode: "0600"
+    register: openldap_schema_copy
+
+  - name: Add OpenSSH LPK schema to cn=config
+    ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/openssh-lpk.ldif
+    register: openldap_schema_add
+    failed_when: false
+    changed_when: openldap_schema_add.rc == 0
+    become: true
+
+  # Load groupWithMember and memberOf user schema (OpenBSD default has core only)
+  - name: Copy groupWithMember and memberOf-user schema LDIFs
+    copy:
+      src: "{{ item }}"
+      dest: "{{ openldap_ldif_dir }}/{{ item }}"
+      mode: "0600"
+    loop:
+      - group-with-member.ldif
+      - memberof-user.ldif
+    become: true
+
+  - name: Add groupWithMember schema to cn=config
+    ansible.builtin.command: ldapadd -Y EXTERNAL -H ldapi:/// -f {{ openldap_ldif_dir }}/group-with-member.ldif
+    register: openldap_groupwithmember_add
+    failed_when: false
+    changed_when: openldap_groupwithmember_add.rc == 0
+    become: true
+  tags:
+    - openldap
+    - openldap_schema

@@ -1,0 +1,70 @@
+---
+# OpenLDAP SSL: CA and server certificates (run before install so TLS LDIF can reference them).
+# Tag: openldap_install
+- name: Create OpenLDAP SSL directory
+  ansible.builtin.file:
+    path: "{{ openldap_ssl_dir }}"
+    state: directory
+    mode: "0755"   # 0755 so nslcd (ssh_ldap) can read TLS CA cert; keep in sync with ssh_ldap role
+    owner: root
+    group: "{{ openldap_group }}"
+
+- name: Generate CA key
+  ansible.builtin.command: >
+    openssl genrsa -out {{ openldap_ssl_dir }}/ca.key 2048
+  args:
+    creates: "{{ openldap_ssl_dir }}/ca.key"
+
+- name: Set permissions on CA key
+  ansible.builtin.file:
+    path: "{{ openldap_ssl_dir }}/ca.key"
+    owner: root
+    group: "{{ openldap_group }}"
+    mode: "0640"
+
+- name: Generate self-signed CA certificate (openssl CLI)
+  ansible.builtin.command: >
+    openssl req -new -x509 -days 3650
+    -key {{ openldap_ssl_dir }}/ca.key -out {{ openldap_ssl_dir }}/ca.crt
+    -subj "/O={{ openldap_organization }}/CN=Kakwa Lab LDAP CA"
+  args:
+    creates: "{{ openldap_ssl_dir }}/ca.crt"
+
+- name: Generate LDAP server key
+  ansible.builtin.command: >
+    openssl genrsa -out {{ openldap_ssl_dir }}/ldap.key 2048
+  args:
+    creates: "{{ openldap_ssl_dir }}/ldap.key"
+
+- name: Set permissions on LDAP server key
+  ansible.builtin.file:
+    path: "{{ openldap_ssl_dir }}/ldap.key"
+    owner: "{{ openldap_group }}"
+    group: "{{ openldap_group }}"
+    mode: "0640"
+
+- name: Generate LDAP server certificate signing request
+  ansible.builtin.command: >
+    openssl req -new -key {{ openldap_ssl_dir }}/ldap.key -out {{ openldap_ssl_dir }}/ldap.csr
+    -subj "/O={{ openldap_organization }}/CN={{ openldap_fqdn }}"
+    -addext "subjectAltName=DNS:{{ openldap_fqdn }},DNS:utility,DNS:localhost"
+  args:
+    creates: "{{ openldap_ssl_dir }}/ldap.csr"
+
+- name: Sign LDAP server certificate with CA
+  ansible.builtin.command: >
+    openssl x509 -req -in {{ openldap_ssl_dir }}/ldap.csr
+    -CA {{ openldap_ssl_dir }}/ca.crt -CAkey {{ openldap_ssl_dir }}/ca.key
+    -CAcreateserial -out {{ openldap_ssl_dir }}/ldap.crt -days 3650
+  args:
+    creates: "{{ openldap_ssl_dir }}/ldap.crt"
+
+- name: Set ownership on LDAP server certificate and key
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ openldap_group }}"
+    group: "{{ openldap_group }}"
+    mode: "0640"
+  loop:
+    - "{{ openldap_ssl_dir }}/ldap.crt"
+    - "{{ openldap_ssl_dir }}/ldap.key"

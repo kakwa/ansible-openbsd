@@ -1,0 +1,28 @@
+---
+# OpenLDAP service accounts: ssh_ldap read-only technical account
+# Tag: openldap_accounts
+# Read-only technical account for ssh_ldap (NSS/PAM/AuthorizedKeysCommand)
+- name: Hash password for ssh_ldap read-only technical account
+  ansible.builtin.command: slappasswd -s "{{ openldap_ssh_ldap_readonly_password }}"
+  register: openldap_ssh_ldap_readonly_password_hash
+  changed_when: false
+  become: true
+
+- name: Create ssh_ldap read-only technical account in ou=services
+  community.general.ldap_entry:
+    dn: "{{ openldap_ssh_ldap_readonly_dn }}"
+    objectClass:
+      - inetOrgPerson
+      - organizationalPerson
+      - person
+      - top
+    attributes:
+      uid: "{{ openldap_ssh_ldap_readonly_uid }}"
+      cn: "{{ openldap_ssh_ldap_readonly_uid }}"
+      sn: "{{ openldap_ssh_ldap_readonly_uid }}"
+      userPassword: "{{ openldap_ssh_ldap_readonly_password_hash.stdout }}"
+    state: present
+    server_uri: "ldaps://127.0.0.1:636/"
+    bind_dn: "cn=admin,{{ openldap_base_dn }}"
+    bind_pw: "{{ openldap_admin_password }}"
+    validate_certs: false

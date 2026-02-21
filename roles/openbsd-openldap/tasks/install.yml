@@ -1,0 +1,128 @@
+---
+# OpenLDAP install: packages, bootstrap slapd.d, TLS LDIF, service (SSL certs in ssl.yml)
+# Tag: openldap_install
+- name: Install OpenLDAP server and utilities (OpenBSD)
+  community.general.openbsd_pkg:
+    name:
+      - "{{ openldap_server_package | default('openldap-server--') }}"
+      - "{{ openldap_client_package | default('openldap-client--') }}"
+    state: present
+
+- name: Ensure OpenLDAP LDIF directory exists (for bootstrap)
+  ansible.builtin.file:
+    path: "{{ openldap_ldif_dir }}"
+    state: directory
+    mode: "0750"
+    owner: root
+    group: "{{ openldap_group }}"
+
+- name: Ensure MDB data directory exists (olcDbDirectory; slapd must own for writemap-free open)
+  ansible.builtin.file:
+    path: /var/openldap-data
+    state: directory
+    mode: "0750"
+    owner: "{{ openldap_group }}"
+    group: "{{ openldap_group }}"
+
+- name: Ensure Slapd directory exists
+  ansible.builtin.file:
+    path: /etc/openldap/slapd.d/
+    state: directory
+    mode: "0750"
+    owner: "{{ openldap_group }}"
+    group: "{{ openldap_group }}"
+
+- name: Hash admin password for olcRootPW (bootstrap)
+  ansible.builtin.command: slappasswd -s "{{ openldap_admin_password }}"
+  register: openldap_admin_password_hash
+  changed_when: false
+  become: true
+
+# OpenBSD paths (/var/run/openldap/), base DN, root DN/PW, no olcDbEnvFlags writemap (W^X).
+- name: Deploy default slapd.ldif from role template (OpenBSD paths, no-writemap)
+  ansible.builtin.template:
+    src: slapd.ldif.j2
+    dest: /etc/openldap/slapd.ldif
+    mode: "0600"
+
+- name: Check if slapd.d config directory exists
+  ansible.builtin.stat:
+    path: /etc/openldap/slapd.d/cn=config.ldif
+  register: slapd_d_stat
+
+- name: Ensure slapd.d config directory exists
+  ansible.builtin.file:
+    path: /etc/openldap/slapd.d/
+    state: directory
+    mode: "0750"
+  when: not slapd_d_stat.stat.exists
+
+- name: Initialize slapd.d from slapd.ldif (only when slapd.d does not exist)
+  ansible.builtin.command: /usr/local/sbin/slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif
+  become: true
+  when: not slapd_d_stat.stat.exists
+
+- name: Set ownership on slapd.d directory
+  ansible.builtin.file:
+    path: /etc/openldap/slapd.d
+    owner: "{{ openldap_group }}"
+    group: "{{ openldap_group }}"
+    recurse: true
+
+- name: Check if slapd.conf exists
+  ansible.builtin.stat:
+    path: /etc/openldap/slapd.conf
+  register: slapd_conf_exists
+
+- name: Deploy slapd.conf for CLI tools (slapcat etc.; slapd uses slapd.d at runtime)
+  ansible.builtin.template:
+    src: slapd.conf.j2
+    dest: /etc/openldap/slapd.conf
+    mode: "0600"
+  when: not slapd_conf_exists.stat.exists
+
+# OpenBSD: slapcat with slapd.conf triggers MDB "forcing writemap" -> Operation not permitted (W^X).
+# Install wrapper that uses slapd.d so slapcat works like the running daemon.
+- name: Install slapcat wrapper (slapcat -F slapd.d) for OpenBSD W^X / no-writemap
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      exec /usr/local/sbin/slapcat -F /etc/openldap/slapd.d "$@"
+    dest: /usr/local/bin/slapcat-ldap
+    mode: "0755"
+  become: true
+
+# OpenBSD: remove writemap from MDB config in slapd.d when slapd is down (e.g. after writemap crash).
+- name: Find MDB database LDIF in slapd.d
+  ansible.builtin.find:
+    paths: /etc/openldap/slapd.d
+    recurse: true
+    patterns: "*mdb*.ldif"
+  register: openldap_mdb_ldif_files
+
+- name: Remove olcDbEnvFlags writemap from slapd.d MDB LDIF (OpenBSD compatibility)
+  ansible.builtin.lineinfile:
+    path: "{{ item.path }}"
+    regexp: '^olcDbEnvFlags: (no-)?writemap'
+    state: absent
+  loop: "{{ openldap_mdb_ldif_files.files | default([]) }}"
+
+- name: Ensure slapd is started and enabled
+  ansible.builtin.service:
+    name: slapd
+    state: started
+    enabled: true
+
+- name: Configure slapd listen URLs (rcctl)
+  ansible.builtin.command:
+    argv:
+      - rcctl
+      - set
+      - slapd
+      - flags
+      - "-h '{{ openldap_services }}'"
+  changed_when: true
+  notify: restart slapd
+
+- name: Flush handlers so slapd restarts with ldapi before schema load
+  meta: flush_handlers
